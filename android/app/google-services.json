@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "158876991407",
+    "project_id": "bantunow-5c8c9",
+    "storage_bucket": "bantunow-5c8c9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:158876991407:android:3a134a89f469515e19f95a",
+        "android_client_info": {
+          "package_name": "com.bantunow.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "158876991407-ekd4gugcvpn8bil1n38gmmdi7gocclcr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bantunow.app",
+            "certificate_hash": "e23d2a1eaad986bb44e65fd29ff354833223d302"
+          }
+        },
+        {
+          "client_id": "158876991407-luuvf40sdh3ae4524qb3d0t64b2jf835.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB52azM69crfwE7uT3ZpKMhLm3NbY9JtNE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "158876991407-luuvf40sdh3ae4524qb3d0t64b2jf835.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
