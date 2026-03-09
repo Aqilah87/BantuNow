@@ -6,6 +6,8 @@ import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
 import '../home/home_screen.dart';
+import '../location/select_location_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({Key? key}) : super(key: key);
@@ -44,11 +46,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (!mounted) return;
     
     if (result['success']) {
+      // After signup, always go to select location
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(builder: (context) => const SelectLocationScreen()),
       );
-    } else {
+    }
+    else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result['message']),

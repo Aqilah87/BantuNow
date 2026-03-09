@@ -7,6 +7,8 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
 import 'signup_screen.dart';
 import '../home/home_screen.dart';
+import '../location/select_location_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -39,11 +41,25 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     
     if (result['success']) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
-    } else {
+      // Check if user has selected location
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? userArea = prefs.getString('user_area_id');
+  
+      if (userArea == null) {
+        // First time - go to select location
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const SelectLocationScreen()),
+        );
+      } else {
+        // Already selected - go to home
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    } 
+    else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result['message']),
