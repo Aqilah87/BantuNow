@@ -22,44 +22,46 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
-  
+
   bool _isLoading = false;
   bool _obscurePassword = true;
 
+  Future<void> _checkAndNavigate() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? userArea = prefs.getString('user_area_id');
+
+    if (!mounted) return;
+
+    if (userArea == null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const SelectLocationScreen()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    }
+  }
+
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     final result = await _authService.signInWithEmail(
       _emailController.text.trim(),
       _passwordController.text,
     );
-    
+
     setState(() => _isLoading = false);
-    
+
     if (!mounted) return;
-    
+
     if (result['success']) {
-      // Check if user has selected location
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String? userArea = prefs.getString('user_area_id');
-  
-      if (userArea == null) {
-        // First time - go to select location
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const SelectLocationScreen()),
-        );
-      } else {
-        // Already selected - go to home
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
-      }
-    } 
-    else {
+      await _checkAndNavigate();
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result['message']),
@@ -71,18 +73,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _loginWithGoogle() async {
     setState(() => _isLoading = true);
-    
+
     final result = await _authService.signInWithGoogle();
-    
+
     setState(() => _isLoading = false);
-    
+
     if (!mounted) return;
-    
+
     if (result['success']) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+      await _checkAndNavigate();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -97,6 +96,24 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
+      // ✅ Back button untuk guest yang nak balik tanpa login
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: AppColors.textDark),
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const HomeScreen()),
+              );
+            }
+          },
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -105,8 +122,8 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 40),
-                
+                const SizedBox(height: 16),
+
                 // Logo
                 Center(
                   child: Container(
@@ -123,10 +140,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 32),
-                
-                // Title
+
                 Text(
                   'Welcome Back!',
                   style: TextStyle(
@@ -135,9 +151,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: AppColors.textDark,
                   ),
                 ),
-                
+
                 const SizedBox(height: 8),
-                
+
                 Text(
                   'Sign in to continue helping your community',
                   style: TextStyle(
@@ -145,10 +161,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: AppColors.textGrey,
                   ),
                 ),
-                
+
                 const SizedBox(height: 40),
-                
-                // Email Field
+
                 CustomTextField(
                   controller: _emailController,
                   label: 'Email',
@@ -165,10 +180,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
-                
+
                 const SizedBox(height: 20),
-                
-                // Password Field
+
                 CustomTextField(
                   controller: _passwordController,
                   label: 'Password',
@@ -177,7 +191,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   obscureText: _obscurePassword,
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      _obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                       color: AppColors.textGrey,
                     ),
                     onPressed: () {
@@ -194,16 +210,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
-                
+
                 const SizedBox(height: 12),
-                
-                // Forgot Password
+
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {
-                      // TODO: Implement forgot password
-                    },
+                    onPressed: () {},
                     child: Text(
                       'Forgot Password?',
                       style: TextStyle(
@@ -213,19 +226,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 24),
-                
-                // Login Button
+
                 CustomButton(
                   text: 'Login',
                   onPressed: _login,
                   isLoading: _isLoading,
                 ),
-                
+
                 const SizedBox(height: 24),
-                
-                // Divider
+
                 Row(
                   children: [
                     Expanded(child: Divider(color: AppColors.lightGrey)),
@@ -239,10 +250,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     Expanded(child: Divider(color: AppColors.lightGrey)),
                   ],
                 ),
-                
+
                 const SizedBox(height: 24),
-                
-                // Google Sign In Button
+
                 OutlinedButton(
                   onPressed: _isLoading ? null : _loginWithGoogle,
                   style: OutlinedButton.styleFrom(
@@ -272,10 +282,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 32),
-                
-                // Sign Up Link
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

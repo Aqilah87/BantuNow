@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/colors.dart';
-import '../auth/login_screen.dart';
+import '../home/home_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
@@ -20,28 +20,42 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     OnboardingData(
       icon: Icons.people_outline_rounded,
       title: 'Connect with Your Community',
-      description: 'Find people nearby who need help or can offer assistance in Kuala Terengganu.',
+      titleBM: 'Berhubung dengan Komuniti Anda',
+      description:
+          'Find people nearby who need help or can offer assistance in Kuala Terengganu.',
+      descriptionBM:
+          'Cari orang berhampiran yang memerlukan bantuan atau boleh menawarkan pertolongan di Kuala Terengganu.',
     ),
     OnboardingData(
       icon: Icons.location_on_outlined,
       title: 'Location-Based Matching',
-      description: 'Our smart algorithm matches you with the nearest helpers based on your location.',
+      titleBM: 'Padanan Berdasarkan Lokasi',
+      description:
+          'Our smart algorithm matches you with the nearest helpers based on your location.',
+      descriptionBM:
+          'Algoritma kami memadankan anda dengan pembantu terdekat berdasarkan lokasi anda.',
     ),
     OnboardingData(
       icon: Icons.handshake_outlined,
       title: 'Help & Be Helped',
-      description: 'Request help when you need it, or offer assistance to those around you.',
+      titleBM: 'Bantu & Diberi Bantuan',
+      description:
+          'Request help when you need it, or offer assistance to those around you.',
+      descriptionBM:
+          'Mohon bantuan bila diperlukan, atau tawarkan bantuan kepada mereka di sekeliling anda.',
     ),
   ];
 
   Future<void> _completeOnboarding() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hasSeenOnboarding', true);
-    
+
     if (!mounted) return;
+
+    // ✅ Terus ke HomeScreen (bukan LoginScreen)
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      MaterialPageRoute(builder: (context) => const HomeScreen()),
     );
   }
 
@@ -66,7 +80,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
             ),
-            
+
             // PageView
             Expanded(
               child: PageView.builder(
@@ -82,7 +96,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 },
               ),
             ),
-            
+
             // Page Indicator
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -91,9 +105,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 (index) => _buildDot(index),
               ),
             ),
-            
+
             const SizedBox(height: 32),
-            
+
             // Next / Get Started Button
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -119,7 +133,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     elevation: 0,
                   ),
                   child: Text(
-                    _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',
+                    _currentPage == _pages.length - 1
+                        ? 'Get Started / Mula'
+                        : 'Next / Seterusnya',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -129,7 +145,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 32),
           ],
         ),
@@ -143,7 +159,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Icon
           Container(
             width: 150,
             height: 150,
@@ -157,30 +172,53 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: AppColors.primaryBlue,
             ),
           ),
-          
+
           const SizedBox(height: 48),
-          
-          // Title
+
           Text(
             data.title,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 24,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
               color: AppColors.textDark,
             ),
           ),
-          
+
+          const SizedBox(height: 4),
+
+          Text(
+            data.titleBM,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: AppColors.primaryBlue,
+            ),
+          ),
+
           const SizedBox(height: 16),
-          
-          // Description
+
           Text(
             data.description,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               color: AppColors.textGrey,
               height: 1.5,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          Text(
+            data.descriptionBM,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.textGrey.withOpacity(0.7),
+              height: 1.5,
+              fontStyle: FontStyle.italic,
             ),
           ),
         ],
@@ -194,8 +232,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       width: _currentPage == index ? 24 : 8,
       height: 8,
       decoration: BoxDecoration(
-        color: _currentPage == index 
-            ? AppColors.primaryBlue 
+        color: _currentPage == index
+            ? AppColors.primaryBlue
             : AppColors.lightGrey,
         borderRadius: BorderRadius.circular(4),
       ),
@@ -212,11 +250,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 class OnboardingData {
   final IconData icon;
   final String title;
+  final String titleBM;
   final String description;
+  final String descriptionBM;
 
   OnboardingData({
     required this.icon,
     required this.title,
+    required this.titleBM,
     required this.description,
+    required this.descriptionBM,
   });
 }

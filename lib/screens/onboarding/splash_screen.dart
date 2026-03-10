@@ -1,8 +1,11 @@
+// lib/screens/onboarding/splash_screen.dart
+
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/colors.dart';
 import 'onboarding_screen.dart';
-import '../auth/login_screen.dart';
+import '../home/home_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -20,20 +23,20 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _checkFirstTime() async {
     await Future.delayed(const Duration(seconds: 2));
-    
+
     SharedPreferences prefs = await SharedPreferences.getInstance();
     bool? hasSeenOnboarding = prefs.getBool('hasSeenOnboarding');
-    
+
     if (!mounted) return;
-    
+
     if (hasSeenOnboarding == true) {
-      // User dah pernah buka app, terus ke Login
+      // Dah pernah buka app — terus ke Home (guest atau logged in)
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
       );
     } else {
-      // First time user, pergi Onboarding
+      // First time — pergi Onboarding
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const OnboardingScreen()),
@@ -49,7 +52,6 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Logo (gantikan dengan logo anda)
             Container(
               width: 120,
               height: 120,
@@ -64,7 +66,6 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            
             Text(
               'BantuNow',
               style: TextStyle(
@@ -73,9 +74,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 color: AppColors.white,
               ),
             ),
-            
             const SizedBox(height: 8),
-            
             Text(
               'Community Assistance Made Easy',
               style: TextStyle(
@@ -83,9 +82,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 color: AppColors.white.withOpacity(0.9),
               ),
             ),
-            
             const SizedBox(height: 40),
-            
             const CircularProgressIndicator(
               color: AppColors.white,
             ),
