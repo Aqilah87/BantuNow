@@ -7,10 +7,12 @@ class BantuanModel {
   final String category;
   final String area;
   final String areaId;
-  final String status; // 'open', 'in_progress', 'closed'
-  final String type; // 'request' = minta bantuan, 'offer' = tawar bantuan
+  final String status;
+  final String type; // 'request' atau 'offer'
   final String postedBy;
   final String postedByUid;
+  final String? whatsapp;   // ✅ baru
+  final String? imageUrl;   // ✅ baru
   final DateTime createdAt;
 
   BantuanModel({
@@ -24,6 +26,8 @@ class BantuanModel {
     required this.type,
     required this.postedBy,
     required this.postedByUid,
+    this.whatsapp,
+    this.imageUrl,
     required this.createdAt,
   });
 
@@ -39,6 +43,8 @@ class BantuanModel {
       type: map['type'] ?? 'request',
       postedBy: map['posted_by'] ?? '',
       postedByUid: map['posted_by_uid'] ?? '',
+      whatsapp: map['whatsapp'],
+      imageUrl: map['image_url'],
       createdAt: map['created_at'] != null
           ? (map['created_at'] as dynamic).toDate()
           : DateTime.now(),
@@ -56,12 +62,13 @@ class BantuanModel {
       'type': type,
       'posted_by': postedBy,
       'posted_by_uid': postedByUid,
+      'whatsapp': whatsapp,
+      'image_url': imageUrl,
       'created_at': createdAt,
     };
   }
 }
 
-// Kategori bantuan
 class BantuanCategories {
   static const List<Map<String, dynamic>> categories = [
     {'id': 'makanan', 'name': 'Makanan / Food', 'icon': '🍚'},
