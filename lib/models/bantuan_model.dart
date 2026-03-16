@@ -1,5 +1,7 @@
 // lib/models/bantuan_model.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class BantuanModel {
   final String id;
   final String title;
@@ -8,12 +10,14 @@ class BantuanModel {
   final String area;
   final String areaId;
   final String status;
-  final String type; // 'request' atau 'offer'
+  final String type;
   final String postedBy;
   final String postedByUid;
-  final String? whatsapp;   // ✅ baru
-  final String? imageUrl;   // ✅ baru
+  final String? whatsapp;
+  final String? imageUrl;
   final DateTime createdAt;
+  final double? latitude;
+  final double? longitude;
 
   BantuanModel({
     required this.id,
@@ -29,6 +33,8 @@ class BantuanModel {
     this.whatsapp,
     this.imageUrl,
     required this.createdAt,
+    this.latitude,
+    this.longitude,
   });
 
   factory BantuanModel.fromMap(Map<String, dynamic> map, String id) {
@@ -36,7 +42,7 @@ class BantuanModel {
       id: id,
       title: map['title'] ?? '',
       description: map['description'] ?? '',
-      category: map['category'] ?? '',
+      category: map['category'] ?? 'lain',
       area: map['area'] ?? '',
       areaId: map['area_id'] ?? '',
       status: map['status'] ?? 'open',
@@ -46,8 +52,10 @@ class BantuanModel {
       whatsapp: map['whatsapp'],
       imageUrl: map['image_url'],
       createdAt: map['created_at'] != null
-          ? (map['created_at'] as dynamic).toDate()
+          ? (map['created_at'] as Timestamp).toDate()
           : DateTime.now(),
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
     );
   }
 
@@ -62,37 +70,40 @@ class BantuanModel {
       'type': type,
       'posted_by': postedBy,
       'posted_by_uid': postedByUid,
-      'whatsapp': whatsapp,
-      'image_url': imageUrl,
-      'created_at': createdAt,
+      if (whatsapp != null) 'whatsapp': whatsapp,
+      if (imageUrl != null) 'image_url': imageUrl,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
     };
   }
 }
 
+// ─── Categories ───────────────────────────────────────────────────────────────
 class BantuanCategories {
-  static const List<Map<String, dynamic>> categories = [
-    {'id': 'makanan', 'name': 'Makanan / Food', 'icon': '🍚'},
-    {'id': 'pengangkutan', 'name': 'Pengangkutan / Transport', 'icon': '🚗'},
+  static const List<Map<String, String>> categories = [
+    {'id': 'makanan', 'name': 'Makanan / Food', 'icon': '🍱'},
+    {'id': 'transport', 'name': 'Transport / Ride', 'icon': '🚗'},
     {'id': 'perubatan', 'name': 'Perubatan / Medical', 'icon': '🏥'},
-    {'id': 'kewangan', 'name': 'Kewangan / Financial', 'icon': '💰'},
     {'id': 'pendidikan', 'name': 'Pendidikan / Education', 'icon': '📚'},
+    {'id': 'kewangan', 'name': 'Kewangan / Financial', 'icon': '💰'},
     {'id': 'rumah', 'name': 'Rumah / Housing', 'icon': '🏠'},
+    {'id': 'kerja', 'name': 'Kerja / Employment', 'icon': '💼'},
     {'id': 'lain', 'name': 'Lain-lain / Others', 'icon': '🤝'},
   ];
 
   static String getCategoryName(String id) {
     final cat = categories.firstWhere(
       (c) => c['id'] == id,
-      orElse: () => {'name': 'Lain-lain'},
+      orElse: () => {'name': 'Lain-lain / Others', 'icon': '🤝'},
     );
-    return cat['name'];
+    return cat['name']!;
   }
 
   static String getCategoryIcon(String id) {
     final cat = categories.firstWhere(
       (c) => c['id'] == id,
-      orElse: () => {'icon': '🤝'},
+      orElse: () => {'name': 'Lain-lain / Others', 'icon': '🤝'},
     );
-    return cat['icon'];
+    return cat['icon']!;
   }
 }

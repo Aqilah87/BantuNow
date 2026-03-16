@@ -1,17 +1,19 @@
 // lib/services/bantuan_service.dart
 
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../models/bantuan_model.dart';
 
 class BantuanService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
   final String _collection = 'bantuan';
 
   // ─── FETCH ALL (realtime stream) ───────────────────────────────────────────
   Stream<List<BantuanModel>> getBantuanStream({
-    String? type,       // 'request' / 'offer' / null = semua
-    String? category,   // id kategori / null = semua
-    String? areaId,     // id kawasan / null = semua
+    String? type,
+    String? category,
   }) {
     Query query = _firestore
         .collection(_collection)
@@ -27,11 +29,25 @@ class BantuanService {
     }
 
     return query.snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return BantuanModel.fromMap(
-            doc.data() as Map<String, dynamic>, doc.id);
-      }).toList();
+      return snapshot.docs
+          .map((doc) =>
+              BantuanModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+          .toList();
     });
+  }
+
+  // ─── UPLOAD IMAGE TO FIREBASE STORAGE ──────────────────────────────────────
+  Future<String?> uploadImage(File imageFile, String uid) async {
+    try {
+      final fileName =
+          'bantuan/${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final ref = _storage.ref().child(fileName);
+      await ref.putFile(imageFile);
+      final url = await ref.getDownloadURL();
+      return url;
+    } catch (e) {
+      return null;
+    }
   }
 
   // ─── ADD NEW BANTUAN ────────────────────────────────────────────────────────
@@ -47,7 +63,7 @@ class BantuanService {
     }
   }
 
-  // ─── CLOSE/DELETE BANTUAN ───────────────────────────────────────────────────
+  // ─── CLOSE BANTUAN ──────────────────────────────────────────────────────────
   Future<Map<String, dynamic>> closeBantuan(String id) async {
     try {
       await _firestore
@@ -61,15 +77,21 @@ class BantuanService {
   }
 
   // ─── GET USER'S OWN BANTUAN ─────────────────────────────────────────────────
+  // ✅ FIX: Buang orderBy untuk elak index error, sort dalam app
   Stream<List<BantuanModel>> getUserBantuan(String uid) {
     return _firestore
         .collection(_collection)
         .where('posted_by_uid', isEqualTo: uid)
-        .orderBy('created_at', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => BantuanModel.fromMap(
-                doc.data() as Map<String, dynamic>, doc.id))
-            .toList());
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) =>
+              BantuanModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+          .toList();
+
+      // Sort dalam app — terbaru dulu
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
   }
 }

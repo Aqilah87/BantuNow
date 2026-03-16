@@ -1,11 +1,10 @@
 // lib/screens/onboarding/splash_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/colors.dart';
 import 'onboarding_screen.dart';
-import '../home/home_screen.dart';
+import '../main_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -30,16 +29,14 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     if (hasSeenOnboarding == true) {
-      // Dah pernah buka app — terus ke Home (guest atau logged in)
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => const MainScreen()),
       );
     } else {
-      // First time — pergi Onboarding
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
       );
     }
   }
@@ -59,33 +56,21 @@ class _SplashScreenState extends State<SplashScreen> {
                 color: AppColors.white,
                 borderRadius: BorderRadius.circular(30),
               ),
-              child: const Icon(
-                Icons.people_alt_rounded,
-                size: 70,
-                color: AppColors.primaryBlue,
-              ),
+              child: const Icon(Icons.people_alt_rounded,
+                  size: 70, color: AppColors.primaryBlue),
             ),
             const SizedBox(height: 24),
-            Text(
-              'BantuNow',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: AppColors.white,
-              ),
-            ),
+            Text('BantuNow',
+                style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.white)),
             const SizedBox(height: 8),
-            Text(
-              'Community Assistance Made Easy',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.white.withOpacity(0.9),
-              ),
-            ),
+            Text('Community Assistance Made Easy',
+                style: TextStyle(
+                    fontSize: 14, color: AppColors.white.withOpacity(0.9))),
             const SizedBox(height: 40),
-            const CircularProgressIndicator(
-              color: AppColors.white,
-            ),
+            const CircularProgressIndicator(color: AppColors.white),
           ],
         ),
       ),

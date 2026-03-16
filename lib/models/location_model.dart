@@ -3,76 +3,52 @@
 class LocationArea {
   final String id;
   final String name;
-  final String category; // 'mukim', 'town', 'area'
+  final String category;
+  final double latitude;
+  final double longitude;
 
-  LocationArea({
+  const LocationArea({
     required this.id,
     required this.name,
-    required this.category,
+    this.category = 'area',
+    required this.latitude,
+    required this.longitude,
   });
 }
 
-// Kuala Terengganu Districts/Areas
 class KualaTerengganuAreas {
-  static final List<LocationArea> areas = [
-    // Main Towns / Bandar Utama
-    LocationArea(id: '001', name: 'Kuala Terengganu (Bandar)', category: 'town'),
-    LocationArea(id: '002', name: 'Kuala Nerus', category: 'town'),
-    
-    // Mukims (Sub-districts)
-    LocationArea(id: '101', name: 'Mukim Batu Buruk', category: 'mukim'),
-    LocationArea(id: '102', name: 'Mukim Pulau Kambing', category: 'mukim'),
-    LocationArea(id: '103', name: 'Mukim Ladang', category: 'mukim'),
-    LocationArea(id: '104', name: 'Mukim Tanjung', category: 'mukim'),
-    
-    // Popular Areas / Kawasan Popular
-    LocationArea(id: '201', name: 'Gong Badak', category: 'area'),
-    LocationArea(id: '202', name: 'Chendering', category: 'area'),
-    LocationArea(id: '203', name: 'Cabang Tiga', category: 'area'),
-    LocationArea(id: '204', name: 'Losong', category: 'area'),
-    LocationArea(id: '205', name: 'Tok Jembal', category: 'area'),
-    LocationArea(id: '206', name: 'Bukit Tunggal', category: 'area'),
-    LocationArea(id: '207', name: 'Seberang Takir', category: 'area'),
-    LocationArea(id: '208', name: 'Kampung Ladang', category: 'area'),
-    LocationArea(id: '209', name: 'Batu Rakit', category: 'area'),
-    LocationArea(id: '210', name: 'Kampung Mangkok', category: 'area'),
-    LocationArea(id: '211', name: 'Teluk Ketapang', category: 'area'),
-    LocationArea(id: '212', name: 'Kampung Mengabang Telipot', category: 'area'),
-    LocationArea(id: '213', name: 'Kampung Baru', category: 'area'),
-    LocationArea(id: '214', name: 'Kuala Ibai', category: 'area'),
-    LocationArea(id: '215', name: 'Bandar Al-Muktafi Billah Shah', category: 'area'),
-    LocationArea(id: '216', name: 'Gong Pauh', category: 'area'),
-    LocationArea(id: '217', name: 'Wakaf Tembesu', category: 'area'),
-    LocationArea(id: '218', name: 'Bukit Payong', category: 'area'),
-    LocationArea(id: '219', name: 'Manir', category: 'area'),
-    LocationArea(id: '220', name: 'Kampung Raja', category: 'area'),
-    LocationArea(id: '221', name: 'Taman Desa Cempaka', category: 'area'),
-    LocationArea(id: '222', name: 'Taman Cendering Jaya', category: 'area'),
-    LocationArea(id: '223', name: 'Taman Bendahara', category: 'area'),
-    
-    // Educational/Institutional Areas
-    LocationArea(id: '301', name: 'UMT (Universiti Malaysia Terengganu)', category: 'area'),
-    LocationArea(id: '302', name: 'UNISZA (Universiti Sultan Zainal Abidin)', category: 'area'),
-    LocationArea(id: '303', name: 'Kompleks Kementerian', category: 'area'),
-    
-    // Commercial/Shopping Areas
-    LocationArea(id: '401', name: 'Pasar Payang', category: 'area'),
-    LocationArea(id: '402', name: 'Chinatown', category: 'area'),
-    LocationArea(id: '403', name: 'Mesra Mall', category: 'area'),
-    LocationArea(id: '404', name: 'Billion Shopping Centre', category: 'area'),
+  static const List<LocationArea> areas = [
+    LocationArea(id: 'kt_bandar',          name: 'Bandar Kuala Terengganu',  category: 'town',  latitude: 5.3296,  longitude: 103.1370),
+    LocationArea(id: 'kt_batu_buruk',      name: 'Batu Buruk',               category: 'area',  latitude: 5.3150,  longitude: 103.1580),
+    LocationArea(id: 'kt_bukit_besar',     name: 'Bukit Besar',              category: 'area',  latitude: 5.3400,  longitude: 103.1200),
+    LocationArea(id: 'kt_chabang_tiga',    name: 'Chabang Tiga',             category: 'mukim', latitude: 5.3600,  longitude: 103.0900),
+    LocationArea(id: 'kt_chendering',      name: 'Chendering',               category: 'area',  latitude: 5.2800,  longitude: 103.1500),
+    LocationArea(id: 'kt_durian_burung',   name: 'Durian Burung',            category: 'area',  latitude: 5.3100,  longitude: 103.1100),
+    LocationArea(id: 'kt_gong_badak',      name: 'Gong Badak',               category: 'mukim', latitude: 5.3900,  longitude: 103.0700),
+    LocationArea(id: 'kt_kuala_ibai',      name: 'Kuala Ibai',               category: 'area',  latitude: 5.2950,  longitude: 103.1650),
+    LocationArea(id: 'kt_ladang',          name: 'Ladang / Wakaf Mempelam',  category: 'area',  latitude: 5.3500,  longitude: 103.1050),
+    LocationArea(id: 'kt_losong',          name: 'Losong',                   category: 'mukim', latitude: 5.3200,  longitude: 103.1100),
+    LocationArea(id: 'kt_manir',           name: 'Manir',                    category: 'mukim', latitude: 5.3750,  longitude: 103.0600),
+    LocationArea(id: 'kt_pengkalan_chepa', name: 'Pengkalan Chepa',          category: 'mukim', latitude: 5.4100,  longitude: 103.0550),
+    LocationArea(id: 'kt_seberang_takir',  name: 'Seberang Takir',           category: 'mukim', latitude: 5.3700,  longitude: 103.1300),
+    LocationArea(id: 'kt_kuala_nerus',     name: 'Kuala Nerus',              category: 'town',  latitude: 5.4300,  longitude: 103.0800),
+    LocationArea(id: 'kt_tok_jembal',      name: 'Tok Jembal',               category: 'area',  latitude: 5.4000,  longitude: 103.0950),
   ];
 
-  // Get area name by ID
   static String getAreaName(String id) {
     try {
-      return areas.firstWhere((area) => area.id == id).name;
-    } catch (e) {
-      return 'Unknown Area';
+      return areas.firstWhere((a) => a.id == id).name;
+    } catch (_) {
+      return 'Kuala Terengganu';
     }
   }
 
-  // Get areas by category
-  static List<LocationArea> getAreasByCategory(String category) {
-    return areas.where((area) => area.category == category).toList();
+  // ✅ Untuk map — get coordinates by area id
+  static LocationArea? getAreaById(String id) {
+    try {
+      return areas.firstWhere((a) => a.id == id);
+    } catch (_) {
+      return null;
+    }
   }
 }

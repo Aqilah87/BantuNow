@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/colors.dart';
 import '../../models/location_model.dart';
 import '../../widgets/custom_button.dart';
-import '../home/home_screen.dart';
+import '../main_screen.dart'; // ✅ FIX: guna MainScreen bukan HomeScreen
 
 class SelectLocationScreen extends StatefulWidget {
   const SelectLocationScreen({Key? key}) : super(key: key);
@@ -37,14 +37,13 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
     if (_selectedAreaId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Please select your area'),
+          content: const Text('Sila pilih kawasan anda'),
           backgroundColor: AppColors.error,
         ),
       );
       return;
     }
 
-    // Save selected location
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString('user_area_id', _selectedAreaId!);
     await prefs.setString(
@@ -54,10 +53,10 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
 
     if (!mounted) return;
 
-    // Navigate to Home
+    // ✅ FIX: Navigate ke MainScreen (ada bottom nav)
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      MaterialPageRoute(builder: (context) => const MainScreen()),
     );
   }
 
@@ -85,11 +84,7 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
             padding: const EdgeInsets.all(24.0),
             child: Column(
               children: [
-                Icon(
-                  Icons.location_on,
-                  size: 80,
-                  color: AppColors.primaryBlue,
-                ),
+                Icon(Icons.location_on, size: 80, color: AppColors.primaryBlue),
                 const SizedBox(height: 16),
                 Text(
                   'Choose Your Area',
@@ -103,10 +98,7 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
                 Text(
                   'Select your area in Kuala Terengganu to find nearby help',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textGrey,
-                  ),
+                  style: TextStyle(fontSize: 14, color: AppColors.textGrey),
                 ),
               ],
             ),
@@ -139,19 +131,12 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.location_off,
-                          size: 64,
-                          color: AppColors.textGrey,
-                        ),
+                        Icon(Icons.location_off,
+                            size: 64, color: AppColors.textGrey),
                         const SizedBox(height: 16),
-                        Text(
-                          'No areas found',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: AppColors.textGrey,
-                          ),
-                        ),
+                        Text('No areas found',
+                            style: TextStyle(
+                                fontSize: 16, color: AppColors.textGrey)),
                       ],
                     ),
                   )
@@ -191,8 +176,9 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
                             area.name,
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight:
-                                  isSelected ? FontWeight.w600 : FontWeight.normal,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
                               color: isSelected
                                   ? AppColors.primaryBlue
                                   : AppColors.textDark,
@@ -205,21 +191,14 @@ class _SelectLocationScreenState extends State<SelectLocationScreen> {
                                     ? 'Mukim'
                                     : 'Area',
                             style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textGrey,
-                            ),
+                                fontSize: 12, color: AppColors.textGrey),
                           ),
                           trailing: isSelected
-                              ? Icon(
-                                  Icons.check_circle,
-                                  color: AppColors.primaryBlue,
-                                )
+                              ? Icon(Icons.check_circle,
+                                  color: AppColors.primaryBlue)
                               : null,
-                          onTap: () {
-                            setState(() {
-                              _selectedAreaId = area.id;
-                            });
-                          },
+                          onTap: () =>
+                              setState(() => _selectedAreaId = area.id),
                         ),
                       );
                     },
