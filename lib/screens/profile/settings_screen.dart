@@ -2,8 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/colors.dart';
+import '../../utils/app_strings.dart';
+import '../../providers/language_provider.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../location/select_location_screen.dart';
@@ -16,11 +19,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  // ✅ Notification toggles (saved in SharedPreferences)
   bool _notifEnabled = true;
   bool _notifNewRequest = true;
   bool _notifMatchFound = true;
-
   bool _isLoading = true;
 
   @override
@@ -44,23 +45,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool(key, value);
   }
 
-  Future<void> _logout() async {
+  Future<void> _logout(AppStrings s) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Log Keluar?'),
-        content: const Text('Adakah anda pasti mahu log keluar?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(s.logoutTitle),
+        content: Text(s.logoutConfirm),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
+              child: Text(s.cancel)),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Log Keluar',
-                style: TextStyle(color: Colors.white)),
+            child: Text(s.logout, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -75,30 +74,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _sendPasswordReset() async {
+  Future<void> _sendPasswordReset(AppStrings s) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user?.email == null) return;
     try {
-      await FirebaseAuth.instance
-          .sendPasswordResetEmail(email: user!.email!);
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: user!.email!);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Email reset dihantar ke ${user.email}'),
+            content: Text('${s.passwordResetSent} ${user.email}'),
             backgroundColor: Colors.green,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('${s.error}: $e')));
       }
     }
   }
 
-  void _showAboutDialog() {
+  void _showAboutDialog(AppStrings s) {
     showAboutDialog(
       context: context,
       applicationName: 'BantuNow',
@@ -113,50 +110,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
             color: Colors.white, size: 32),
       ),
       children: [
-        const Text(
-          'BantuNow adalah platform komuniti untuk menghubungkan '
-          'mereka yang memerlukan bantuan dengan mereka yang sedia '
-          'membantu di sekitar Kuala Terengganu.',
-          style: TextStyle(fontSize: 13),
+        Text(
+          s.isMalay
+              ? 'BantuNow adalah platform komuniti untuk menghubungkan mereka yang memerlukan bantuan dengan mereka yang sedia membantu di sekitar Kuala Terengganu.'
+              : 'BantuNow is a community platform connecting those who need help with those who are ready to assist around Kuala Terengganu.',
+          style: const TextStyle(fontSize: 13),
         ),
       ],
     );
   }
 
-  void _showTermsDialog() {
+  void _showTermsDialog(AppStrings s) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Terma & Syarat'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(s.termsConditions),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('1. Penggunaan Aplikasi',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 4),
-              Text(
-                  'Pengguna bertanggungjawab ke atas semua aktiviti yang dilakukan melalui akaun mereka.'),
-              SizedBox(height: 12),
-              Text('2. Privasi',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 4),
-              Text(
-                  'Maklumat peribadi anda akan disimpan dengan selamat dan tidak akan dikongsi kepada pihak ketiga tanpa kebenaran anda.'),
-              SizedBox(height: 12),
-              Text('3. Kandungan',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 4),
-              Text(
-                  'Pengguna dilarang memuat naik kandungan yang menyalahi undang-undang, berbahaya, atau mengelirukan.'),
-              SizedBox(height: 12),
-              Text('4. Penafian',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 4),
-              Text(
-                  'BantuNow tidak bertanggungjawab ke atas sebarang pertikaian antara pengguna.'),
+            children: [
+              Text(s.isMalay ? '1. Penggunaan Aplikasi' : '1. App Usage',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(s.isMalay
+                  ? 'Pengguna bertanggungjawab ke atas semua aktiviti yang dilakukan melalui akaun mereka.'
+                  : 'Users are responsible for all activities performed through their accounts.'),
+              const SizedBox(height: 12),
+              Text(s.isMalay ? '2. Privasi' : '2. Privacy',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(s.isMalay
+                  ? 'Maklumat peribadi anda akan disimpan dengan selamat dan tidak akan dikongsi kepada pihak ketiga tanpa kebenaran anda.'
+                  : 'Your personal information will be stored securely and will not be shared with third parties without your consent.'),
+              const SizedBox(height: 12),
+              Text(s.isMalay ? '3. Kandungan' : '3. Content',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(s.isMalay
+                  ? 'Pengguna dilarang memuat naik kandungan yang menyalahi undang-undang, berbahaya, atau mengelirukan.'
+                  : 'Users are prohibited from uploading illegal, harmful, or misleading content.'),
+              const SizedBox(height: 12),
+              Text(s.isMalay ? '4. Penafian' : '4. Disclaimer',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(s.isMalay
+                  ? 'BantuNow tidak bertanggungjawab ke atas sebarang pertikaian antara pengguna.'
+                  : 'BantuNow is not responsible for any disputes between users.'),
             ],
           ),
         ),
@@ -165,41 +165,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => Navigator.pop(ctx),
             style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryBlue),
-            child: const Text('Faham', style: TextStyle(color: Colors.white)),
+            child: Text(s.isMalay ? 'Faham' : 'Understood',
+                style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
   }
 
-  void _showPrivacyDialog() {
+  void _showPrivacyDialog(AppStrings s) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Dasar Privasi'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(s.privacyPolicy),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('Maklumat yang Dikumpul',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 4),
+            children: [
               Text(
-                  'Kami mengumpul nama, email, nombor telefon, dan lokasi kawasan anda untuk tujuan menyambungkan komuniti.'),
-              SizedBox(height: 12),
-              Text('Penggunaan Maklumat',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 4),
-              Text(
-                  'Maklumat anda digunakan untuk memaparkan profil dan post bantuan kepada pengguna lain dalam komuniti yang sama.'),
-              SizedBox(height: 12),
-              Text('Keselamatan Data',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 4),
-              Text(
-                  'Data anda disimpan dengan selamat menggunakan Firebase yang mematuhi piawaian keselamatan antarabangsa.'),
+                  s.isMalay
+                      ? 'Maklumat yang Dikumpul'
+                      : 'Information Collected',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(s.isMalay
+                  ? 'Kami mengumpul nama, email, nombor telefon, dan lokasi kawasan anda untuk tujuan menyambungkan komuniti.'
+                  : 'We collect your name, email, phone number, and area location for community connection purposes.'),
+              const SizedBox(height: 12),
+              Text(s.isMalay ? 'Penggunaan Maklumat' : 'Use of Information',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(s.isMalay
+                  ? 'Maklumat anda digunakan untuk memaparkan profil dan post bantuan kepada pengguna lain dalam komuniti yang sama.'
+                  : 'Your information is used to display your profile and help posts to other users in the same community.'),
+              const SizedBox(height: 12),
+              Text(s.isMalay ? 'Keselamatan Data' : 'Data Security',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(s.isMalay
+                  ? 'Data anda disimpan dengan selamat menggunakan Firebase yang mematuhi piawaian keselamatan antarabangsa.'
+                  : 'Your data is stored securely using Firebase which complies with international security standards.'),
             ],
           ),
         ),
@@ -208,14 +214,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => Navigator.pop(ctx),
             style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryBlue),
-            child: const Text('Tutup', style: TextStyle(color: Colors.white)),
+            child: Text(s.close, style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
   }
 
-  void _showFAQ() {
+  void _showFAQ(AppStrings s) {
+    final faqs = s.isMalay
+        ? [
+            ['Macam mana nak post bantuan?', 'Tekan butang "+" di bawah, pilih jenis (minta atau tawar), isi maklumat dan tekan Post.'],
+            ['Kenapa post saya tak keluar di peta?', 'Pastikan anda memilih kawasan semasa membuat post. Koordinat akan ditetapkan secara automatik.'],
+            ['Bagaimana nak hubungi pemilik post?', 'Tekan butang WhatsApp pada halaman detail post. Anda akan dibawa terus ke WhatsApp.'],
+            ['Boleh ke tukar kawasan saya?', 'Ya. Pergi ke Profil → Kawasan dan pilih kawasan baru.'],
+            ['Apa itu role "Both"?', 'Role "Both" bermaksud anda pernah membuat post minta bantuan DAN post tawar bantuan.'],
+            ['Bagaimana nak padam post?', 'Pergi ke "Post Saya" dan tekan ikon padam pada post berkenaan.'],
+          ]
+        : [
+            ['How do I post help?', 'Tap the "+" button below, choose type (request or offer), fill in details and tap Post.'],
+            ['Why is my post not showing on the map?', 'Make sure you select an area when posting. Coordinates will be assigned automatically.'],
+            ['How do I contact the post owner?', 'Tap the WhatsApp button on the post detail page. You will be redirected to WhatsApp.'],
+            ['Can I change my area?', 'Yes. Go to Profile → Area and select a new area.'],
+            ['What is the "Both" role?', '"Both" role means you have made both a help request post AND a help offer post.'],
+            ['How do I delete a post?', 'Go to "My Posts" and tap the delete icon on the relevant post.'],
+          ];
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -241,7 +265,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Icon(Icons.help_outline, color: AppColors.primaryBlue),
                   const SizedBox(width: 10),
-                  Text('FAQ / Soalan Lazim',
+                  Text(s.helpFAQ,
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -254,30 +278,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 controller: controller,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
-                  _buildFAQItem(
-                    'Macam mana nak post bantuan?',
-                    'Tekan butang "+" di bawah, pilih jenis (minta atau tawar), isi maklumat dan tekan Post.',
-                  ),
-                  _buildFAQItem(
-                    'Kenapa post saya tak keluar di peta?',
-                    'Pastikan anda memilih kawasan semasa membuat post. Koordinat akan ditetapkan secara automatik.',
-                  ),
-                  _buildFAQItem(
-                    'Bagaimana nak hubungi pemilik post?',
-                    'Tekan butang WhatsApp pada halaman detail post. Anda akan dibawa terus ke WhatsApp.',
-                  ),
-                  _buildFAQItem(
-                    'Boleh ke tukar kawasan saya?',
-                    'Ya. Pergi ke Profil → Kawasan dan pilih kawasan baru.',
-                  ),
-                  _buildFAQItem(
-                    'Apa itu role "Both"?',
-                    'Role "Both" bermaksud anda pernah membuat post minta bantuan DAN post tawar bantuan.',
-                  ),
-                  _buildFAQItem(
-                    'Bagaimana nak padam post?',
-                    'Pergi ke "My Posts" dan tekan ikon padam pada post berkenaan.',
-                  ),
+                  ...faqs.map((faq) => Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.backgroundBlue,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ExpansionTile(
+                          tilePadding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 4),
+                          childrenPadding:
+                              const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          title: Text(faq[0],
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textDark)),
+                          iconColor: AppColors.primaryBlue,
+                          collapsedIconColor: AppColors.primaryBlue,
+                          children: [
+                            Text(faq[1],
+                                style: TextStyle(
+                                    fontSize: 13, color: AppColors.textGrey)),
+                          ],
+                        ),
+                      )),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -288,34 +313,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildFAQItem(String question, String answer) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: AppColors.backgroundBlue,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        childrenPadding:
-            const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        title: Text(question,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textDark)),
-        iconColor: AppColors.primaryBlue,
-        collapsedIconColor: AppColors.primaryBlue,
-        children: [
-          Text(answer,
-              style: TextStyle(fontSize: 13, color: AppColors.textGrey)),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final langProvider = context.watch<LanguageProvider>();
+    final s = langProvider.strings;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -325,8 +327,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Tetapan / Settings',
-            style: TextStyle(
+        title: Text(s.settingsTitle,
+            style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
                 fontSize: 18)),
@@ -339,8 +341,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
+                  // ── Language Toggle ───────────────────────────────────
+                  _buildSectionLabel(s.language),
+                  _buildCard(children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.backgroundBlue,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Icons.language,
+                                size: 18, color: AppColors.primaryBlue),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(s.language.replaceAll('🌐 ', ''),
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: AppColors.textDark)),
+                                Text(s.languageDesc,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textGrey)),
+                              ],
+                            ),
+                          ),
+                          // ✅ Language toggle chips
+                          Row(
+                            children: [
+                              _buildLangChip(
+                                label: 'BM',
+                                isSelected: langProvider.isMalay,
+                                onTap: () => langProvider.setMalay(),
+                              ),
+                              const SizedBox(width: 8),
+                              _buildLangChip(
+                                label: 'EN',
+                                isSelected: !langProvider.isMalay,
+                                onTap: () => langProvider.setEnglish(),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ]),
+
+                  const SizedBox(height: 16),
+
                   // ── Notification Settings ─────────────────────────────
-                  _buildSectionLabel('🔔 Tetapan Notifikasi'),
+                  _buildSectionLabel(s.notificationSettings),
                   _buildCard(children: [
                     SwitchListTile(
                       secondary: Container(
@@ -352,12 +410,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Icon(Icons.notifications_outlined,
                             size: 18, color: AppColors.primaryBlue),
                       ),
-                      title: Text('Aktifkan Notifikasi',
+                      title: Text(s.enableNotifications,
                           style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                               color: AppColors.textDark)),
-                      subtitle: Text('Hidupkan/matikan semua notifikasi',
+                      subtitle: Text(s.enableNotificationsDesc,
                           style: TextStyle(
                               fontSize: 12, color: AppColors.textGrey)),
                       value: _notifEnabled,
@@ -378,14 +436,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: const Icon(Icons.pan_tool,
                             size: 18, color: Colors.orange),
                       ),
-                      title: Text('Alert Request Baru',
+                      title: Text(s.newRequestAlert,
                           style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                               color: _notifEnabled
                                   ? AppColors.textDark
                                   : AppColors.textGrey)),
-                      subtitle: Text('Notifikasi bila ada request baru',
+                      subtitle: Text(s.newRequestAlertDesc,
                           style: TextStyle(
                               fontSize: 12, color: AppColors.textGrey)),
                       value: _notifEnabled && _notifNewRequest,
@@ -408,14 +466,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: const Icon(Icons.handshake_outlined,
                             size: 18, color: Colors.green),
                       ),
-                      title: Text('Alert Match Dijumpai',
+                      title: Text(s.matchFoundAlert,
                           style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w500,
                               color: _notifEnabled
                                   ? AppColors.textDark
                                   : AppColors.textGrey)),
-                      subtitle: Text('Notifikasi bila ada match untuk post anda',
+                      subtitle: Text(s.matchFoundAlertDesc,
                           style: TextStyle(
                               fontSize: 12, color: AppColors.textGrey)),
                       value: _notifEnabled && _notifMatchFound,
@@ -432,12 +490,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 16),
 
                   // ── Location Settings ─────────────────────────────────
-                  _buildSectionLabel('📍 Tetapan Lokasi'),
+                  _buildSectionLabel(s.locationSettings),
                   _buildCard(children: [
                     _buildTile(
                       icon: Icons.edit_location_alt_outlined,
-                      label: 'Tukar Kawasan',
-                      subtitle: 'Kemaskini kawasan rumah anda',
+                      label: s.changeHomeArea,
+                      subtitle: s.changeHomeAreaDesc,
                       color: AppColors.primaryBlue,
                       onTap: () async {
                         final prefs = await SharedPreferences.getInstance();
@@ -454,68 +512,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const Divider(height: 1, indent: 16),
                     _buildTile(
                       icon: Icons.gps_fixed,
-                      label: 'Kebenaran Lokasi',
-                      subtitle: 'Uruskan akses GPS peranti',
+                      label: s.locationPermission,
+                      subtitle: s.locationPermissionDesc,
                       color: Colors.teal,
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text(
-                                  'Pergi ke Tetapan Peranti → App → BantuNow → Kebenaran')),
-                        );
-                      },
+                      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(s.locationPermissionMsg)),
+                      ),
                     ),
                   ]),
 
                   const SizedBox(height: 16),
 
-                  // ── Privacy Settings ──────────────────────────────────
-                  _buildSectionLabel('🔒 Privasi & Keselamatan'),
+                  // ── Privacy ───────────────────────────────────────────
+                  _buildSectionLabel(s.privacySecurity),
                   _buildCard(children: [
                     _buildTile(
                       icon: Icons.privacy_tip_outlined,
-                      label: 'Dasar Privasi',
-                      subtitle: 'Cara kami melindungi data anda',
+                      label: s.privacyPolicy,
+                      subtitle: s.privacyPolicyDesc,
                       color: Colors.indigo,
-                      onTap: _showPrivacyDialog,
+                      onTap: () => _showPrivacyDialog(s),
                     ),
                     const Divider(height: 1, indent: 16),
                     _buildTile(
                       icon: Icons.lock_reset,
-                      label: 'Tukar Kata Laluan',
-                      subtitle: 'Hantar email reset kata laluan',
+                      label: s.changePassword,
+                      subtitle: s.changePasswordDesc,
                       color: Colors.deepOrange,
-                      onTap: _sendPasswordReset,
+                      onTap: () => _sendPasswordReset(s),
                     ),
                   ]),
 
                   const SizedBox(height: 16),
 
                   // ── About & Help ──────────────────────────────────────
-                  _buildSectionLabel('ℹ️ Tentang & Bantuan'),
+                  _buildSectionLabel(s.aboutHelp),
                   _buildCard(children: [
                     _buildTile(
                       icon: Icons.help_outline,
-                      label: 'Bantuan / FAQ',
-                      subtitle: 'Soalan yang kerap ditanya',
+                      label: s.helpFAQ,
+                      subtitle: s.helpFAQDesc,
                       color: Colors.purple,
-                      onTap: _showFAQ,
+                      onTap: () => _showFAQ(s),
                     ),
                     const Divider(height: 1, indent: 16),
                     _buildTile(
                       icon: Icons.article_outlined,
-                      label: 'Terma & Syarat',
-                      subtitle: 'Syarat penggunaan BantuNow',
+                      label: s.termsConditions,
+                      subtitle: s.termsConditionsDesc,
                       color: Colors.brown,
-                      onTap: _showTermsDialog,
+                      onTap: () => _showTermsDialog(s),
                     ),
                     const Divider(height: 1, indent: 16),
                     _buildTile(
                       icon: Icons.info_outline,
-                      label: 'Tentang BantuNow',
-                      subtitle: 'Versi 1.0.0 — Community Assistance App',
+                      label: s.aboutApp,
+                      subtitle: s.aboutAppDesc,
                       color: AppColors.primaryBlue,
-                      onTap: _showAboutDialog,
+                      onTap: () => _showAboutDialog(s),
                     ),
                   ]),
 
@@ -526,10 +580,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     width: double.infinity,
                     height: 54,
                     child: OutlinedButton.icon(
-                      onPressed: _logout,
+                      onPressed: () => _logout(s),
                       icon: const Icon(Icons.logout, color: Colors.red),
-                      label: const Text('Log Keluar / Logout',
-                          style: TextStyle(
+                      label: Text(s.logout,
+                          style: const TextStyle(
                               color: Colors.red,
                               fontSize: 15,
                               fontWeight: FontWeight.w600)),
@@ -545,6 +599,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildLangChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primaryBlue : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: isSelected ? AppColors.primaryBlue : Colors.grey.shade300),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isSelected ? Colors.white : AppColors.textGrey)),
+      ),
     );
   }
 

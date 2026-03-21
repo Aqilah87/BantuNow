@@ -1,12 +1,15 @@
 // lib/screens/bantuan/bantuan_detail_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../utils/colors.dart';
 import '../../models/bantuan_model.dart';
 import '../../services/bantuan_service.dart';
+import '../../services/deep_link_service.dart';
 
 class BantuanDetailScreen extends StatefulWidget {
   final BantuanModel bantuan;
@@ -39,7 +42,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     _loadPosterPhone();
   }
 
-  // ✅ Fetch nombor telefon poster dari Firestore
   Future<void> _loadPosterPhone() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -47,21 +49,15 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           .doc(widget.bantuan.postedByUid)
           .get();
       if (doc.exists) {
-        setState(() {
-          _posterPhone = doc.data()?['num_phone'] ?? '';
-        });
+        setState(() => _posterPhone = doc.data()?['num_phone'] ?? '');
       }
     } catch (e) {
-      // guna whatsapp field kalau ada
-      setState(() {
-        _posterPhone = widget.bantuan.whatsapp ?? '';
-      });
+      setState(() => _posterPhone = widget.bantuan.whatsapp ?? '');
     } finally {
       setState(() => _isLoadingPhone = false);
     }
   }
 
-  // ✅ Format phone untuk display
   String _formatPhoneDisplay(String phone) {
     if (phone.isEmpty) return 'Tidak tersedia';
     String cleaned = phone.replaceAll(RegExp(r'\D'), '');
@@ -71,7 +67,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     return phone;
   }
 
-  // ✅ Format untuk WhatsApp link
   String _formatWhatsApp(String phone) {
     String cleaned = phone.replaceAll(RegExp(r'\D'), '');
     if (cleaned.startsWith('0')) cleaned = '6$cleaned';
@@ -84,7 +79,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
       widget.onLoginRequired('menghubungi melalui WhatsApp');
       return;
     }
-
     final phone = widget.bantuan.whatsapp ?? _posterPhone;
     if (phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -92,12 +86,10 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
       );
       return;
     }
-
     final formatted = _formatWhatsApp(phone);
     final message = Uri.encodeComponent(
         'Salam, saya berminat dengan post anda bertajuk "${widget.bantuan.title}" di BantuNow.');
     final url = Uri.parse('https://wa.me/$formatted?text=$message');
-
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     } else {
@@ -109,37 +101,209 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     }
   }
 
-  // ✅ Mark as completed
+  // ✅ Share post dengan deep link
+  void _sharePost() {
+    final bantuan = widget.bantuan;
+    final link = DeepLinkService.generatePostLink(bantuan.id);
+    final isRequest = bantuan.type == 'request';
+    final typeEmoji = isRequest ? '🙋' : '🤲';
+    final typeLabel = isRequest ? 'Minta Bantuan' : 'Tawar Bantuan';
+    final categoryName =
+        BantuanCategories.getCategoryName(bantuan.category).split(' / ')[0];
+    final desc = bantuan.description.length > 100
+        ? '${bantuan.description.substring(0, 100)}...'
+        : bantuan.description;
+
+    final shareText =
+        '$typeEmoji *$typeLabel di BantuNow!*\n\n📌 *${bantuan.title}*\n🏷️ Kategori: $categoryName\n📍 Kawasan: ${bantuan.area}\n\n$desc\n\n🔗 Lihat selengkapnya:\n$link\n\n_Dikongsi melalui BantuNow — Aplikasi Bantuan Komuniti Kuala Terengganu_';
+
+    Share.share(shareText, subject: bantuan.title);
+  }
+
+  // ✅ Copy link sahaja
+  void _copyLink() {
+    final link = DeepLinkService.generatePostLink(widget.bantuan.id);
+    Clipboard.setData(ClipboardData(text: link));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Text('Link berjaya disalin!'),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  // ✅ Share via WhatsApp terus
+  void _shareViaWhatsApp() async {
+    final link = DeepLinkService.generatePostLink(widget.bantuan.id);
+    final bantuan = widget.bantuan;
+    final message = Uri.encodeComponent(
+        '🙌 Tengok post bantuan ni kat BantuNow!\n\n*${bantuan.title}*\n📍 ${bantuan.area}\n\n$link');
+    final url = Uri.parse('https://wa.me/?text=$message');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  // ✅ Share bottom sheet
+  void _showShareSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 16),
+            Text('Kongsi Post',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textDark)),
+            const SizedBox(height: 4),
+            Text('Kongsikan post ini kepada rakan anda',
+                style: TextStyle(fontSize: 13, color: AppColors.textGrey)),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildShareOption(
+                  icon: Icons.share,
+                  label: 'Kongsi',
+                  color: AppColors.primaryBlue,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _sharePost();
+                  },
+                ),
+                _buildShareOption(
+                  icon: Icons.chat,
+                  label: 'WhatsApp',
+                  color: const Color(0xFF25D366),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _shareViaWhatsApp();
+                  },
+                ),
+                _buildShareOption(
+                  icon: Icons.link,
+                  label: 'Salin Link',
+                  color: Colors.orange,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _copyLink();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // Link preview
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.backgroundBlue,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.link, size: 16, color: AppColors.primaryBlue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      DeepLinkService.generatePostLink(widget.bantuan.id),
+                      style: TextStyle(
+                          fontSize: 11, color: AppColors.primaryBlue),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShareOption({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withOpacity(0.3)),
+            ),
+            child: Icon(icon, color: color, size: 26),
+          ),
+          const SizedBox(height: 8),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textDark)),
+        ],
+      ),
+    );
+  }
+
   Future<void> _markAsCompleted() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Tandakan Selesai?'),
         content: const Text(
             'Adakah anda pasti bantuan ini telah selesai?\n\nPost akan ditutup dan tidak akan dipaparkan lagi.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Batal', style: TextStyle(color: AppColors.textGrey)),
+            child:
+                Text('Batal', style: TextStyle(color: AppColors.textGrey)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('Ya, Selesai', style: TextStyle(color: Colors.white)),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Ya, Selesai',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
-
     if (confirm != true) return;
-
     setState(() => _isActionLoading = true);
     final result = await _bantuanService.closeBantuan(widget.bantuan.id);
     setState(() => _isActionLoading = false);
-
     if (!mounted) return;
-
     if (result['success']) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -151,38 +315,37 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     }
   }
 
-  // ✅ Delete post
   Future<void> _deletePost() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Padam Post?'),
-        content: const Text('Adakah anda pasti mahu memadam post ini? Tindakan ini tidak boleh dibatalkan.'),
+        content: const Text(
+            'Adakah anda pasti mahu memadam post ini? Tindakan ini tidak boleh dibatalkan.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Batal', style: TextStyle(color: AppColors.textGrey)),
+            child:
+                Text('Batal', style: TextStyle(color: AppColors.textGrey)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Padam', style: TextStyle(color: Colors.white)),
+            child: const Text('Padam',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
-
     if (confirm != true) return;
-
     setState(() => _isActionLoading = true);
-
     try {
       await FirebaseFirestore.instance
           .collection('bantuan')
           .doc(widget.bantuan.id)
           .delete();
-
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -194,9 +357,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     } catch (e) {
       setState(() => _isActionLoading = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memadam: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal memadam: $e')));
     }
   }
 
@@ -206,8 +368,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     final isRequest = bantuan.type == 'request';
     final typeColor = isRequest ? Colors.orange : Colors.green;
     final typeLabel = isRequest ? 'Request Help' : 'Offer Help';
-
-    // Status config
     final isActive = bantuan.status == 'open';
     final statusColor = isActive ? Colors.green : Colors.grey;
     final statusLabel = isActive ? 'Active' : 'Completed';
@@ -217,7 +377,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
       backgroundColor: const Color(0xFFF5F7FA),
       body: CustomScrollView(
         slivers: [
-          // ✅ Full-size image dengan AppBar overlay
           SliverAppBar(
             expandedHeight: bantuan.imageUrl != null ? 280 : 120,
             pinned: true,
@@ -229,12 +388,25 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   color: Colors.black.withOpacity(0.4),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                child: const Icon(Icons.arrow_back,
+                    color: Colors.white, size: 20),
               ),
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
-              // Owner actions dalam appbar
+              // ✅ Share button dalam AppBar
+              IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.share,
+                      color: Colors.white, size: 20),
+                ),
+                onPressed: _showShareSheet,
+              ),
               if (_isOwner)
                 PopupMenuButton<String>(
                   icon: Container(
@@ -243,7 +415,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                       color: Colors.black.withOpacity(0.4),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.more_vert, color: Colors.white, size: 20),
+                    child: const Icon(Icons.more_vert,
+                        color: Colors.white, size: 20),
                   ),
                   onSelected: (val) {
                     if (val == 'complete') _markAsCompleted();
@@ -252,57 +425,52 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   itemBuilder: (_) => [
                     const PopupMenuItem(
                       value: 'complete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.task_alt, color: Colors.green, size: 20),
-                          SizedBox(width: 8),
-                          Text('Mark as Completed'),
-                        ],
-                      ),
+                      child: Row(children: [
+                        Icon(Icons.task_alt, color: Colors.green, size: 20),
+                        SizedBox(width: 8),
+                        Text('Mark as Completed'),
+                      ]),
                     ),
                     const PopupMenuItem(
                       value: 'delete',
-                      child: Row(
-                        children: [
-                          Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                          SizedBox(width: 8),
-                          Text('Delete Post', style: TextStyle(color: Colors.red)),
-                        ],
-                      ),
+                      child: Row(children: [
+                        Icon(Icons.delete_outline,
+                            color: Colors.red, size: 20),
+                        SizedBox(width: 8),
+                        Text('Delete Post',
+                            style: TextStyle(color: Colors.red)),
+                      ]),
                     ),
                   ],
                 ),
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: bantuan.imageUrl != null
-                  ? Image.network(
-                      bantuan.imageUrl!,
+                  ? Image.network(bantuan.imageUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _buildImagePlaceholder(),
-                    )
+                      errorBuilder: (_, __, ___) =>
+                          _buildImagePlaceholder())
                   : _buildImagePlaceholder(),
             ),
           ),
 
-          // ✅ Content
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
-                  // ── Badges row ─────────────────────────────────────────────
+                  // Badges
                   Row(
                     children: [
-                      // Type badge
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 5),
                         decoration: BoxDecoration(
                           color: typeColor.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: typeColor.withOpacity(0.3)),
+                          border: Border.all(
+                              color: typeColor.withOpacity(0.3)),
                         ),
                         child: Text(typeLabel,
                             style: TextStyle(
@@ -311,8 +479,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                 color: typeColor)),
                       ),
                       const SizedBox(width: 8),
-
-                      // Category badge
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 5),
@@ -327,16 +493,14 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                         ),
                       ),
                       const Spacer(),
-
-                      // ✅ Status badge
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
                           color: statusColor.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border:
-                              Border.all(color: statusColor.withOpacity(0.3)),
+                          border: Border.all(
+                              color: statusColor.withOpacity(0.3)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -356,43 +520,35 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 16),
 
-                  // ── Title ──────────────────────────────────────────────────
-                  Text(
-                    bantuan.title,
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textDark),
-                  ),
+                  Text(bantuan.title,
+                      style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textDark)),
 
                   const SizedBox(height: 8),
 
-                  // ✅ Timestamp + distance
                   Row(
                     children: [
                       Icon(Icons.access_time,
                           size: 14, color: AppColors.textGrey),
                       const SizedBox(width: 4),
-                      Text(
-                        'Posted: ${_timeAgo(bantuan.createdAt)}',
-                        style: TextStyle(
-                            fontSize: 13, color: AppColors.textGrey),
-                      ),
+                      Text('Posted: ${_timeAgo(bantuan.createdAt)}',
+                          style: TextStyle(
+                              fontSize: 13, color: AppColors.textGrey)),
                       const SizedBox(width: 16),
                       Icon(Icons.location_on_outlined,
                           size: 14, color: AppColors.primaryBlue),
                       const SizedBox(width: 4),
-                      Text(
-                        bantuan.area,
-                        style: TextStyle(
-                            fontSize: 13, color: AppColors.primaryBlue),
-                      ),
+                      Text(bantuan.area,
+                          style: TextStyle(
+                              fontSize: 13, color: AppColors.primaryBlue)),
                     ],
                   ),
 
                   const SizedBox(height: 20),
 
-                  // ── Description ────────────────────────────────────────────
+                  // Description
                   _buildCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -400,20 +556,18 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                         _buildCardTitle('Penerangan / Description',
                             Icons.description_outlined),
                         const SizedBox(height: 10),
-                        Text(
-                          bantuan.description,
-                          style: TextStyle(
-                              fontSize: 15,
-                              color: AppColors.textDark,
-                              height: 1.6),
-                        ),
+                        Text(bantuan.description,
+                            style: TextStyle(
+                                fontSize: 15,
+                                color: AppColors.textDark,
+                                height: 1.6)),
                       ],
                     ),
                   ),
 
                   const SizedBox(height: 16),
 
-                  // ── User Info ──────────────────────────────────────────────
+                  // User Info
                   _buildCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -421,8 +575,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                         _buildCardTitle('Maklumat Pengguna / User Info',
                             Icons.person_outline),
                         const SizedBox(height: 14),
-
-                        // Avatar + Name
                         Row(
                           children: [
                             CircleAvatar(
@@ -455,12 +607,9 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                             ),
                           ],
                         ),
-
                         const SizedBox(height: 14),
                         const Divider(height: 1),
                         const SizedBox(height: 14),
-
-                        // ✅ Phone number
                         Row(
                           children: [
                             Container(
@@ -487,7 +636,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                         child: LinearProgressIndicator())
                                     : Text(
                                         widget.isLoggedIn
-                                            ? _formatPhoneDisplay(_posterPhone)
+                                            ? _formatPhoneDisplay(
+                                                _posterPhone)
                                             : '••••••••••',
                                         style: TextStyle(
                                             fontSize: 15,
@@ -501,8 +651,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                             if (!widget.isLoggedIn) ...[
                               const Spacer(),
                               TextButton(
-                                onPressed: () => widget
-                                    .onLoginRequired('melihat nombor telefon'),
+                                onPressed: () => widget.onLoginRequired(
+                                    'melihat nombor telefon'),
                                 child: Text('Login untuk lihat',
                                     style: TextStyle(
                                         fontSize: 12,
@@ -511,10 +661,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                             ],
                           ],
                         ),
-
                         const SizedBox(height: 12),
-
-                        // ✅ Location
                         Row(
                           children: [
                             Container(
@@ -541,28 +688,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                         color: AppColors.textDark)),
                               ],
                             ),
-                            const Spacer(),
-                            // ✅ Distance badge
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppColors.backgroundBlue,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.near_me,
-                                      size: 12, color: AppColors.primaryBlue),
-                                  const SizedBox(width: 4),
-                                  Text('Dalam kawasan KT',
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppColors.primaryBlue)),
-                                ],
-                              ),
-                            ),
                           ],
                         ),
                       ],
@@ -571,22 +696,41 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 24),
 
-                  // ── Action Buttons ─────────────────────────────────────────
+                  // ✅ Share button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: _showShareSheet,
+                      icon: Icon(Icons.share,
+                          color: AppColors.primaryBlue, size: 18),
+                      label: Text('Kongsi Post / Share Post',
+                          style: TextStyle(
+                              color: AppColors.primaryBlue,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: AppColors.primaryBlue),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
 
-                  // ✅ WhatsApp button (semua user)
+                  const SizedBox(height: 12),
+
+                  // WhatsApp button
                   SizedBox(
                     width: double.infinity,
                     height: 54,
                     child: ElevatedButton.icon(
                       onPressed: _isActionLoading ? null : _openWhatsApp,
                       icon: const Icon(Icons.chat, color: Colors.white),
-                      label: const Text(
-                        'Contact via WhatsApp',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white),
-                      ),
+                      label: const Text('Contact via WhatsApp',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF25D366),
                         shape: RoundedRectangleBorder(
@@ -596,16 +740,16 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                     ),
                   ),
 
-                  // ✅ Owner buttons
+                  // Owner buttons
                   if (_isOwner && bantuan.status == 'open') ...[
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        // Mark as Completed
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed:
-                                _isActionLoading ? null : _markAsCompleted,
+                            onPressed: _isActionLoading
+                                ? null
+                                : _markAsCompleted,
                             icon: const Icon(Icons.task_alt,
                                 color: Colors.green, size: 18),
                             label: const Text('Mark Completed',
@@ -615,13 +759,12 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                               side: const BorderSide(color: Colors.green),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10)),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12),
                             ),
                           ),
                         ),
                         const SizedBox(width: 12),
-                        // Delete
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed:
@@ -635,8 +778,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                               side: const BorderSide(color: Colors.red),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10)),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12),
                             ),
                           ),
                         ),
@@ -700,7 +843,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.image_outlined,
-                size: 60, color: AppColors.primaryBlue.withOpacity(0.3)),
+                size: 60,
+                color: AppColors.primaryBlue.withOpacity(0.3)),
             const SizedBox(height: 8),
             Text('Tiada Gambar',
                 style: TextStyle(
