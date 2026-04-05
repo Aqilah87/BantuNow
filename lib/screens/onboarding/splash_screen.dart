@@ -1,6 +1,7 @@
 // lib/screens/onboarding/splash_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/colors.dart';
 import 'onboarding_screen.dart';
@@ -17,28 +18,35 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _checkFirstTime();
+    _init();
   }
 
-  Future<void> _checkFirstTime() async {
+  Future<void> _init() async {
     await Future.delayed(const Duration(seconds: 2));
 
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool? hasSeenOnboarding = prefs.getBool('hasSeenOnboarding');
+    final prefs = await SharedPreferences.getInstance();
+    final hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;
 
     if (!mounted) return;
 
-    if (hasSeenOnboarding == true) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainScreen()),
-      );
-    } else {
+    // Belum tengok onboarding
+    if (!hasSeenOnboarding) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const OnboardingScreen()),
       );
+      return;
     }
+
+    // ✅ Tunggu Firebase Auth state settled dulu
+    await FirebaseAuth.instance.authStateChanges().first;
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const MainScreen()),
+    );
   }
 
   @override
@@ -60,7 +68,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   size: 70, color: AppColors.primaryBlue),
             ),
             const SizedBox(height: 24),
-            Text('BantuNow',
+            const Text('BantuNow',
                 style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
