@@ -7,6 +7,7 @@ import '../../utils/colors.dart';
 import '../../models/bantuan_model.dart';
 import '../../services/bantuan_service.dart';
 import '../bantuan/bantuan_detail_screen.dart';
+import '../bantuan/post_bantuan_screen.dart'; // ✅ tambah import
 
 class MyPostsScreen extends StatefulWidget {
   const MyPostsScreen({Key? key}) : super(key: key);
@@ -54,7 +55,6 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                 fontWeight: FontWeight.bold,
                 fontSize: 20)),
       ),
-      // ✅ FIX: Guna StreamBuilder dengan getUserBantuan yang dah fix
       body: StreamBuilder<List<BantuanModel>>(
         stream: _bantuanService.getUserBantuan(user.uid),
         builder: (context, snapshot) {
@@ -105,12 +105,10 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
           }
 
           final activePosts = posts.where((p) => p.status == 'open').length;
-          final completedPosts =
-              posts.where((p) => p.status == 'closed').length;
+          final completedPosts = posts.where((p) => p.status == 'closed').length;
 
           return Column(
             children: [
-              // Stats bar
               Container(
                 color: AppColors.primaryBlue,
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -118,15 +116,12 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                   children: [
                     _buildStatChip('${posts.length}', 'Total', Colors.white),
                     const SizedBox(width: 12),
-                    _buildStatChip(
-                        '$activePosts', 'Active', Colors.green.shade300),
+                    _buildStatChip('$activePosts', 'Active', Colors.green.shade300),
                     const SizedBox(width: 12),
-                    _buildStatChip(
-                        '$completedPosts', 'Completed', Colors.grey.shade300),
+                    _buildStatChip('$completedPosts', 'Completed', Colors.grey.shade300),
                   ],
                 ),
               ),
-
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.all(16),
@@ -197,7 +192,6 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
         ),
         child: Column(
           children: [
-            // Image kalau ada
             if (post.imageUrl != null)
               ClipRRect(
                 borderRadius:
@@ -210,13 +204,11 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                   errorBuilder: (_, __, ___) => const SizedBox(),
                 ),
               ),
-
             Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Badges row
                   Row(
                     children: [
                       Container(
@@ -253,8 +245,8 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                         decoration: BoxDecoration(
                           color: statusColor.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: statusColor.withOpacity(0.3)),
+                          border:
+                              Border.all(color: statusColor.withOpacity(0.3)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -306,15 +298,18 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                   const Divider(height: 1),
                   const SizedBox(height: 8),
 
-                  // Action buttons
+                  // ✅ Action buttons — edit button sekarang buka EditScreen
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       IconButton(
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Edit - Coming soon!')),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  PostBantuanScreen(existingPost: post), // ✅
+                            ),
                           );
                         },
                         icon: Icon(Icons.edit_outlined,
@@ -337,13 +332,12 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                       if (isActive) ...[
                         const SizedBox(width: 8),
                         TextButton.icon(
-                          onPressed: () =>
-                              _confirmComplete(context, post),
+                          onPressed: () => _confirmComplete(context, post),
                           icon: const Icon(Icons.task_alt,
                               color: Colors.green, size: 16),
                           label: const Text('Complete',
-                              style: TextStyle(
-                                  color: Colors.green, fontSize: 12)),
+                              style:
+                                  TextStyle(color: Colors.green, fontSize: 12)),
                           style: TextButton.styleFrom(
                             backgroundColor: Colors.green.withOpacity(0.1),
                             shape: RoundedRectangleBorder(
@@ -379,8 +373,8 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Padam',
-                style: TextStyle(color: Colors.white)),
+            child:
+                const Text('Padam', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -417,16 +411,14 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Tandakan Selesai?'),
-        content:
-            const Text('Post akan ditutup dan tidak dipaparkan lagi.'),
+        content: const Text('Post akan ditutup dan tidak dipaparkan lagi.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Batal')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style:
-                ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             child: const Text('Ya, Selesai',
                 style: TextStyle(color: Colors.white)),
           ),

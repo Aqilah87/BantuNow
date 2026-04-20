@@ -11,7 +11,9 @@ import '../main_screen.dart';
 import '../location/select_location_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  // ✅ Tambah parameter canGoBack
+  final bool canGoBack;
+  const LoginScreen({Key? key, this.canGoBack = false}) : super(key: key);
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -56,7 +58,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await _checkAndNavigate();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['message']), backgroundColor: AppColors.error),
+        SnackBar(
+            content: Text(result['message']),
+            backgroundColor: AppColors.error),
       );
     }
   }
@@ -70,7 +74,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await _checkAndNavigate();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['message']), backgroundColor: AppColors.error),
+        SnackBar(
+            content: Text(result['message']),
+            backgroundColor: AppColors.error),
       );
     }
   }
@@ -82,19 +88,14 @@ class _LoginScreenState extends State<LoginScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.textDark),
-          onPressed: () {
-            if (Navigator.canPop(context)) {
-              Navigator.pop(context);
-            } else {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const MainScreen()),
-              );
-            }
-          },
-        ),
+        automaticallyImplyLeading: false,
+        // ✅ Tunjuk back arrow HANYA kalau canGoBack = true
+        leading: widget.canGoBack
+            ? IconButton(
+                icon: Icon(Icons.arrow_back, color: AppColors.textDark),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -107,20 +108,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 16),
                 Center(
                   child: Container(
-                    width: 80, height: 80,
+                    width: 80,
+                    height: 80,
                     decoration: BoxDecoration(
                       color: AppColors.backgroundBlue,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(Icons.people_alt_rounded, size: 50, color: AppColors.primaryBlue),
+                    child: const Icon(Icons.people_alt_rounded,
+                        size: 50, color: AppColors.primaryBlue),
                   ),
                 ),
                 const SizedBox(height: 32),
                 Text('Welcome Back!',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+                    style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textDark)),
                 const SizedBox(height: 8),
                 Text('Sign in to continue helping your community',
-                    style: TextStyle(fontSize: 15, color: AppColors.textGrey)),
+                    style:
+                        TextStyle(fontSize: 15, color: AppColors.textGrey)),
                 const SizedBox(height: 40),
                 CustomTextField(
                   controller: _emailController,
@@ -129,8 +136,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'Please enter your email';
-                    if (!value.contains('@')) return 'Please enter a valid email';
+                    if (value == null || value.isEmpty)
+                      return 'Please enter your email';
+                    if (!value.contains('@'))
+                      return 'Please enter a valid email';
                     return null;
                   },
                 ),
@@ -142,13 +151,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   prefixIcon: Icons.lock_outline,
                   obscureText: _obscurePassword,
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                         color: AppColors.textGrey),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) return 'Please enter your password';
-                    if (value.length < 6) return 'Password must be at least 6 characters';
+                    if (value == null || value.isEmpty)
+                      return 'Please enter your password';
+                    if (value.length < 6)
+                      return 'Password must be at least 6 characters';
                     return null;
                   },
                 ),
@@ -158,18 +173,24 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: TextButton(
                     onPressed: () {},
                     child: Text('Forgot Password?',
-                        style: TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.w600)),
+                        style: TextStyle(
+                            color: AppColors.primaryBlue,
+                            fontWeight: FontWeight.w600)),
                   ),
                 ),
                 const SizedBox(height: 24),
-                CustomButton(text: 'Login', onPressed: _login, isLoading: _isLoading),
+                CustomButton(
+                    text: 'Login',
+                    onPressed: _login,
+                    isLoading: _isLoading),
                 const SizedBox(height: 24),
                 Row(
                   children: [
                     Expanded(child: Divider(color: AppColors.lightGrey)),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text('OR', style: TextStyle(color: AppColors.textGrey)),
+                      child: Text('OR',
+                          style: TextStyle(color: AppColors.textGrey)),
                     ),
                     Expanded(child: Divider(color: AppColors.lightGrey)),
                   ],
@@ -180,15 +201,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 56),
                     side: BorderSide(color: AppColors.lightGrey),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Image.network('https://www.google.com/favicon.ico', width: 24, height: 24),
+                      Image.network(
+                          'https://www.google.com/favicon.ico',
+                          width: 24,
+                          height: 24),
                       const SizedBox(width: 12),
                       Text('Continue with Google',
-                          style: TextStyle(fontSize: 16, color: AppColors.textDark, fontWeight: FontWeight.w600)),
+                          style: TextStyle(
+                              fontSize: 16,
+                              color: AppColors.textDark,
+                              fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -196,12 +224,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text("Don't have an account? ", style: TextStyle(color: AppColors.textGrey)),
+                    Text("Don't have an account? ",
+                        style: TextStyle(color: AppColors.textGrey)),
                     TextButton(
-                      onPressed: () => Navigator.push(context,
-                          MaterialPageRoute(builder: (_) => const SignUpScreen())),
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const SignUpScreen())),
                       child: Text('Sign Up',
-                          style: TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.w600)),
+                          style: TextStyle(
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),

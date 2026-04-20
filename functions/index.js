@@ -1,32 +1,78 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+// functions/index.js
 
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
-const logger = require("firebase-functions/logger");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const admin = require("firebase-admin");
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+admin.initializeApp();
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+// ✅ Trigger bila ada post bantuan baru (Firebase Functions v2)
+exports.notifyAvailableHelpers = onDocumentCreated(
+    "bantuan/{docId}",
+    async (event) => {
+      const data = event.data.data();
 
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+      // Hanya proses kalau jenis 'request'
+      if (data.type !== "request") return null;
+
+      const areaId = data.area_id;
+      const title = data.title;
+      const area = data.area;
+      const category = data.category;
+      const docId = event.params.docId;
+
+      if (!areaId) return null;
+
+      try {
+        // Cari semua helper yang available dalam kawasan sama
+        const helpersSnap = await admin.firestore()
+            .collection("users")
+            .where("availability_status", "==", "available")
+            .where("area_id", "==", areaId)
+            .get();
+
+        if (helpersSnap.empty) {
+          console.log("Tiada helper available dalam kawasan:", areaId);
+          return null;
+        }
+
+        // Kumpul FCM tokens
+        const tokens = [];
+        helpersSnap.forEach((doc) => {
+          const fcmToken = doc.data().fcm_token;
+          const uid = doc.id;
+          if (fcmToken && uid !== data.posted_by_uid) {
+            tokens.push(fcmToken);
+          }
+        });
+
+        if (tokens.length === 0) {
+          console.log("Tiada token FCM untuk dihantar");
+          return null;
+        }
+
+        // Hantar notification
+        const message = {
+          notification: {
+            title: "🙋 Request Bantuan Baru!",
+            body: `${title} — ${area}`,
+          },
+          data: {
+            type: "new_request",
+            post_id: docId,
+            area_id: areaId,
+            category: category ?? "",
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+          },
+          tokens: tokens,
+        };
+
+        const response = await admin.messaging().sendEachForMulticast(message);
+        console.log(`Notification: ${response.successCount} berjaya, ${response.failureCount} gagal`);
+
+        return null;
+      } catch (error) {
+        console.error("Error:", error);
+        return null;
+      }
+    }
+);

@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'providers/language_provider.dart';
 import 'services/deep_link_service.dart';
+import 'services/notification_service.dart';
 import 'utils/colors.dart';
 import 'screens/onboarding/splash_screen.dart';
 
@@ -23,6 +24,7 @@ class BantuNowApp extends StatefulWidget {
 
 class _BantuNowAppState extends State<BantuNowApp> {
   final _deepLinkService = DeepLinkService();
+  final _notificationService = NotificationService();
 
   @override
   void initState() {
@@ -37,7 +39,6 @@ class _BantuNowAppState extends State<BantuNowApp> {
       child: MaterialApp(
         title: 'BantuNow',
         debugShowCheckedModeBanner: false,
-        // ✅ navigatorKey untuk deep link navigation
         navigatorKey: _deepLinkService.navigatorKey,
         theme: ThemeData(
           primaryColor: AppColors.primaryBlue,
@@ -46,6 +47,13 @@ class _BantuNowAppState extends State<BantuNowApp> {
           useMaterial3: false,
         ),
         home: const SplashScreen(),
+        builder: (context, child) {
+          // ✅ Init notification service selepas app ready
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _notificationService.init(_deepLinkService.navigatorKey!);
+          });
+          return child!;
+        },
       ),
     );
   }
