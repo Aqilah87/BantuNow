@@ -11,9 +11,7 @@ import '../main_screen.dart';
 import '../location/select_location_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  // ✅ Tambah parameter canGoBack
-  final bool canGoBack;
-  const LoginScreen({Key? key, this.canGoBack = false}) : super(key: key);
+  const LoginScreen({Key? key}) : super(key: key);
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -85,18 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
-      appBar: AppBar(
-        backgroundColor: AppColors.white,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        // ✅ Tunjuk back arrow HANYA kalau canGoBack = true
-        leading: widget.canGoBack
-            ? IconButton(
-                icon: Icon(Icons.arrow_back, color: AppColors.textDark),
-                onPressed: () => Navigator.pop(context),
-              )
-            : null,
-      ),
+      // ✅ Tiada AppBar — tiada back arrow langsung
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -105,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 16),
+                const SizedBox(height: 40),
                 Center(
                   child: Container(
                     width: 80,
@@ -126,8 +113,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: AppColors.textDark)),
                 const SizedBox(height: 8),
                 Text('Sign in to continue helping your community',
-                    style:
-                        TextStyle(fontSize: 15, color: AppColors.textGrey)),
+                    style: TextStyle(
+                        fontSize: 15, color: AppColors.textGrey)),
                 const SizedBox(height: 40),
                 CustomTextField(
                   controller: _emailController,
@@ -156,8 +143,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? Icons.visibility_off
                             : Icons.visibility,
                         color: AppColors.textGrey),
-                    onPressed: () =>
-                        setState(() => _obscurePassword = !_obscurePassword),
+                    onPressed: () => setState(
+                        () => _obscurePassword = !_obscurePassword),
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty)
@@ -186,13 +173,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 24),
                 Row(
                   children: [
-                    Expanded(child: Divider(color: AppColors.lightGrey)),
+                    Expanded(
+                        child: Divider(color: AppColors.lightGrey)),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 16),
                       child: Text('OR',
-                          style: TextStyle(color: AppColors.textGrey)),
+                          style:
+                              TextStyle(color: AppColors.textGrey)),
                     ),
-                    Expanded(child: Divider(color: AppColors.lightGrey)),
+                    Expanded(
+                        child: Divider(color: AppColors.lightGrey)),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -225,7 +216,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text("Don't have an account? ",
-                        style: TextStyle(color: AppColors.textGrey)),
+                        style:
+                            TextStyle(color: AppColors.textGrey)),
                     TextButton(
                       onPressed: () => Navigator.push(
                           context,

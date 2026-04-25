@@ -31,25 +31,31 @@ class _MainScreenState extends State<MainScreen> {
             const Text('Login Diperlukan'),
           ],
         ),
-        content: Text('Anda perlu log masuk untuk $action.\n\nLog masuk sekarang?'),
+        content: Text(
+            'Anda perlu log masuk untuk $action.\n\nLog masuk sekarang?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Batal', style: TextStyle(color: AppColors.textGrey)),
+            child: Text('Batal',
+                style: TextStyle(color: AppColors.textGrey)),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                // ✅ Tiada canGoBack — user kena login untuk teruskan
+                MaterialPageRoute(
+                    builder: (_) => const LoginScreen()),
               );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryBlue,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Log Masuk', style: TextStyle(color: Colors.white)),
+            child: const Text('Log Masuk',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -82,11 +88,9 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ StreamBuilder — listen Firebase auth state secara realtime
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Tunggu Firebase restore auth state dulu
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
@@ -119,12 +123,13 @@ class _MainScreenState extends State<MainScreen> {
             ),
             child: BottomNavigationBar(
               currentIndex: _currentIndex == 1 ? 0 : _currentIndex,
-              onTap: (index) => _onTabTapped(index, isLoggedIn), // ✅ pass isLoggedIn
+              onTap: (index) => _onTabTapped(index, isLoggedIn),
               type: BottomNavigationBarType.fixed,
               backgroundColor: Colors.white,
               selectedItemColor: AppColors.primaryBlue,
               unselectedItemColor: AppColors.textGrey,
-              selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              selectedLabelStyle: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w600),
               unselectedLabelStyle: const TextStyle(fontSize: 11),
               items: [
                 const BottomNavigationBarItem(
@@ -139,7 +144,8 @@ class _MainScreenState extends State<MainScreen> {
                       color: AppColors.primaryBlue,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.add, color: Colors.white, size: 22),
+                    child: const Icon(Icons.add,
+                        color: Colors.white, size: 22),
                   ),
                   label: 'Post',
                 ),

@@ -59,6 +59,7 @@ class BantuanModel {
     );
   }
 
+  // ✅ Semua guna snake_case — consistent dengan Firestore
   Map<String, dynamic> toMap() {
     return {
       'title': title,
@@ -78,7 +79,6 @@ class BantuanModel {
   }
 }
 
-// ─── Categories ───────────────────────────────────────────────────────────────
 class BantuanCategories {
   static const List<Map<String, String>> categories = [
     {'id': 'makanan', 'name': 'Makanan / Food', 'icon': '🍱'},

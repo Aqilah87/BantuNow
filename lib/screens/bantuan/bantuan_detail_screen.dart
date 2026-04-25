@@ -12,6 +12,7 @@ import '../../providers/language_provider.dart';
 import '../../models/bantuan_model.dart';
 import '../../services/bantuan_service.dart';
 import '../../services/deep_link_service.dart';
+import '../../widgets/rating_dialog.dart'; // ✅ tambah import
 
 class BantuanDetailScreen extends StatefulWidget {
   final BantuanModel bantuan;
@@ -213,6 +214,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     );
   }
 
+  // ✅ Trigger rating dialog selepas mark as completed
   Future<void> _markAsCompleted(bool isMalay) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -234,16 +236,35 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
       ),
     );
     if (confirm != true) return;
+
     setState(() => _isActionLoading = true);
     final result = await _bantuanService.closeBantuan(widget.bantuan.id);
     setState(() => _isActionLoading = false);
     if (!mounted) return;
+
     if (result['success']) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(isMalay ? '✅ Bantuan ditandakan selesai!' : '✅ Help marked as completed!'),
         backgroundColor: Colors.green,
       ));
-      Navigator.pop(context);
+
+      // ✅ Trigger rating dialog — hanya kalau bukan owner yang complete
+      // (owner rate orang yang hubungi, non-owner rate poster)
+      if (mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => RatingDialog(
+            bantuanId: widget.bantuan.id,
+            ratedUserUid: widget.bantuan.postedByUid,
+            ratedUserName: widget.bantuan.postedBy,
+            type: 'poster',
+            isMalay: isMalay,
+          ),
+        );
+      }
+
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -366,7 +387,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Badges
                   Row(children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -422,7 +442,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 20),
 
-                  // Description
                   _buildCard(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -435,12 +454,10 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 16),
 
-                  // User Info
                   _buildCard(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildCardTitle(
-                          isMalay ? 'Maklumat Pengguna' : 'User Info', Icons.person_outline),
+                      _buildCardTitle(isMalay ? 'Maklumat Pengguna' : 'User Info', Icons.person_outline),
                       const SizedBox(height: 14),
                       Row(children: [
                         CircleAvatar(
@@ -464,8 +481,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                       Row(children: [
                         Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                          decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
                           child: const Icon(Icons.phone, size: 18, color: Colors.green),
                         ),
                         const SizedBox(width: 12),
@@ -515,7 +531,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 24),
 
-                  // Share button
                   SizedBox(
                     width: double.infinity, height: 48,
                     child: OutlinedButton.icon(
@@ -532,7 +547,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 12),
 
-                  // WhatsApp button
                   SizedBox(
                     width: double.infinity, height: 54,
                     child: ElevatedButton.icon(
@@ -548,7 +562,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                     ),
                   ),
 
-                  // Owner buttons
                   if (_isOwner && bantuan.status == 'open') ...[
                     const SizedBox(height: 12),
                     Row(children: [
@@ -596,11 +609,9 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
   Widget _buildCard({required Widget child}) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      width: double.infinity, padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white, borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: child,

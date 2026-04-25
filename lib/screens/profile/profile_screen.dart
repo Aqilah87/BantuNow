@@ -40,9 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isEditing = false;
   File? _newProfileImage;
 
-  // ✅ Availability status
-  bool get _isAvailable =>
-      _userData['availability_status'] == 'available';
+  bool get _isAvailable => _userData['availability_status'] == 'available';
 
   @override
   void initState() {
@@ -85,39 +83,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ✅ Toggle availability
   Future<void> _toggleAvailability(bool isMalay) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     setState(() => _isUpdatingAvailability = true);
-
     final newStatus = _isAvailable ? 'unavailable' : 'available';
-
     try {
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .update({'availability_status': newStatus});
-
       setState(() {
         _userData['availability_status'] = newStatus;
         _isUpdatingAvailability = false;
       });
-
       if (mounted) {
-        final msg = newStatus == 'available'
-            ? (isMalay
-                ? '✅ Anda kini Available untuk membantu!'
-                : '✅ You are now Available to help!')
-            : (isMalay
-                ? 'Status ditukar kepada Tidak Available'
-                : 'Status changed to Unavailable');
-
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(msg),
-          backgroundColor:
-              newStatus == 'available' ? Colors.green : Colors.grey,
+          content: Text(newStatus == 'available'
+              ? (isMalay ? '✅ Anda kini Available untuk membantu!' : '✅ You are now Available to help!')
+              : (isMalay ? 'Status ditukar kepada Tidak Available' : 'Status changed to Unavailable')),
+          backgroundColor: newStatus == 'available' ? Colors.green : Colors.grey,
         ));
       }
     } catch (e) {
@@ -141,10 +126,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _pickProfileImage() async {
     final picked = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 80);
+        source: ImageSource.gallery, maxWidth: 512, maxHeight: 512, imageQuality: 80);
     if (picked != null) setState(() => _newProfileImage = File(picked.path));
   }
 
@@ -155,33 +137,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       String? photoUrl = _userData['photo_url'];
       if (_newProfileImage != null) {
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('profiles/${user.uid}.jpg');
+        final ref = FirebaseStorage.instance.ref().child('profiles/${user.uid}.jpg');
         await ref.putFile(_newProfileImage!);
         photoUrl = await ref.getDownloadURL();
         await user.updatePhotoURL(photoUrl);
       }
       await user.updateDisplayName(_nameController.text.trim());
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
         'name': _nameController.text.trim(),
         'num_phone': _phoneController.text.trim(),
         if (photoUrl != null) 'photo_url': photoUrl,
       });
       await _loadUserData();
-      setState(() {
-        _isEditing = false;
-        _newProfileImage = null;
-        _isSaving = false;
-      });
+      setState(() { _isEditing = false; _newProfileImage = null; _isSaving = false; });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(isMalay
-              ? '✅ Profil berjaya dikemaskini!'
-              : '✅ Profile updated successfully!'),
+          content: Text(isMalay ? '✅ Profil berjaya dikemaskini!' : '✅ Profile updated successfully!'),
           backgroundColor: Colors.green,
         ));
       }
@@ -189,8 +160,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => _isSaving = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              '${isMalay ? 'Gagal kemaskini' : 'Update failed'}: $e'),
+          content: Text('${isMalay ? 'Gagal kemaskini' : 'Update failed'}: $e'),
         ));
       }
     }
@@ -200,35 +170,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(isMalay ? 'Log Keluar?' : 'Logout?'),
-        content: Text(isMalay
-            ? 'Adakah anda pasti mahu log keluar?'
-            : 'Are you sure you want to logout?'),
+        content: Text(isMalay ? 'Adakah anda pasti mahu log keluar?' : 'Are you sure you want to logout?'),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(isMalay ? 'Batal' : 'Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(isMalay ? 'Batal' : 'Cancel')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style:
-                ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(isMalay ? 'Log Keluar' : 'Logout',
-                style: const TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(isMalay ? 'Log Keluar' : 'Logout', style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
     if (confirm != true) return;
-
-    // ✅ Remove FCM token on logout
     await NotificationService().onUserLogout();
     await _authService.signOut();
-
     if (!mounted) return;
-    Navigator.pushReplacement(
-        context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   @override
@@ -252,26 +211,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         elevation: 0,
         automaticallyImplyLeading: false,
         title: Text(isMalay ? 'Profil' : 'Profile',
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 20)),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
         actions: [
           if (!_isEditing) ...[
             IconButton(
-              icon:
-                  const Icon(Icons.settings_outlined, color: Colors.white),
-              tooltip: isMalay ? 'Tetapan' : 'Settings',
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const SettingsScreen())),
+              icon: const Icon(Icons.settings_outlined, color: Colors.white),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
             ),
             TextButton.icon(
               onPressed: () => setState(() => _isEditing = true),
-              icon:
-                  const Icon(Icons.edit, color: Colors.white, size: 18),
-              label: Text(isMalay ? 'Edit' : 'Edit',
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 14)),
+              icon: const Icon(Icons.edit, color: Colors.white, size: 18),
+              label: Text(isMalay ? 'Edit' : 'Edit', style: const TextStyle(color: Colors.white, fontSize: 14)),
             ),
           ] else ...[
             TextButton(
@@ -281,21 +231,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _nameController.text = _userData['name'] ?? '';
                 _phoneController.text = _userData['num_phone'] ?? '';
               }),
-              child: Text(isMalay ? 'Batal' : 'Cancel',
-                  style: const TextStyle(color: Colors.white70)),
+              child: Text(isMalay ? 'Batal' : 'Cancel', style: const TextStyle(color: Colors.white70)),
             ),
             TextButton(
               onPressed: _isSaving ? null : () => _saveProfile(isMalay),
               child: _isSaving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
-                  : Text(isMalay ? 'Simpan' : 'Save',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold)),
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text(isMalay ? 'Simpan' : 'Save', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ],
@@ -305,7 +247,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : SingleChildScrollView(
               child: Column(
                 children: [
-                  // ── Header ─────────────────────────────────────────
+                  // ── Header ──
                   Container(
                     color: AppColors.primaryBlue,
                     width: double.infinity,
@@ -315,46 +257,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Stack(
                           children: [
                             GestureDetector(
-                              onTap:
-                                  _isEditing ? _pickProfileImage : null,
+                              onTap: _isEditing ? _pickProfileImage : null,
                               child: CircleAvatar(
                                 radius: 50,
                                 backgroundColor: Colors.white,
                                 backgroundImage: _newProfileImage != null
                                     ? FileImage(_newProfileImage!)
                                     : (_userData['photo_url'] != null
-                                        ? NetworkImage(
-                                            _userData['photo_url'])
+                                        ? NetworkImage(_userData['photo_url'])
                                         : null) as ImageProvider?,
-                                child: (_newProfileImage == null &&
-                                        _userData['photo_url'] == null)
+                                child: (_newProfileImage == null && _userData['photo_url'] == null)
                                     ? Text(
-                                        (_userData['name'] ??
-                                                user?.email ??
-                                                'U')[0]
-                                            .toUpperCase(),
-                                        style: TextStyle(
-                                            fontSize: 36,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppColors.primaryBlue),
+                                        (_userData['name'] ?? user?.email ?? 'U')[0].toUpperCase(),
+                                        style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: AppColors.primaryBlue),
                                       )
                                     : null,
                               ),
                             ),
                             if (_isEditing)
                               Positioned(
-                                bottom: 0,
-                                right: 0,
+                                bottom: 0, right: 0,
                                 child: GestureDetector(
                                   onTap: _pickProfileImage,
                                   child: Container(
                                     padding: const EdgeInsets.all(6),
-                                    decoration: const BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle),
-                                    child: Icon(Icons.camera_alt,
-                                        size: 18,
-                                        color: AppColors.primaryBlue),
+                                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                                    child: Icon(Icons.camera_alt, size: 18, color: AppColors.primaryBlue),
                                   ),
                                 ),
                               ),
@@ -362,68 +290,69 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 12),
                         if (!_isEditing) ...[
-                          Text(
-                              _userData['name'] ??
-                                  user?.displayName ??
-                                  'User',
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold)),
+                          Text(_userData['name'] ?? user?.displayName ?? 'User',
+                              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
-                          Text(user?.email ?? '',
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 13)),
+                          Text(user?.email ?? '', style: const TextStyle(color: Colors.white70, fontSize: 13)),
                           const SizedBox(height: 12),
                           // Role badge
                           Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 7),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
                             decoration: BoxDecoration(
                               color: _roleColor.withOpacity(0.25),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                  color: Colors.white.withOpacity(0.4)),
+                              border: Border.all(color: Colors.white.withOpacity(0.4)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(_roleEmoji,
-                                    style:
-                                        const TextStyle(fontSize: 15)),
+                                Text(_roleEmoji, style: const TextStyle(fontSize: 15)),
                                 const SizedBox(width: 6),
-                                Text(roleLabel,
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600)),
+                                Text(roleLabel, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),
                           const SizedBox(height: 12),
+                          // Stat chips
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              _buildStatChip('$_requestCount',
-                                  'Request', Colors.orange),
+                              _buildStatChip('$_requestCount', 'Request', Colors.orange),
                               const SizedBox(width: 12),
-                              _buildStatChip(
-                                  '$_offerCount', 'Offer', Colors.blue),
+                              _buildStatChip('$_offerCount', 'Offer', Colors.blue),
                               const SizedBox(width: 12),
-                              _buildStatChip(
-                                  '${_requestCount + _offerCount}',
-                                  isMalay ? 'Jumlah' : 'Total',
-                                  Colors.white),
+                              _buildStatChip('${_requestCount + _offerCount}',
+                                  isMalay ? 'Jumlah' : 'Total', Colors.white),
                             ],
                           ),
+
+                          // ✅ Rating badge
+                          if ((_userData['rating'] ?? 0) > 0) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.amber.withOpacity(0.5)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.star_rounded, color: Colors.amber, size: 16),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${_userData['rating']} (${_userData['rating_count']} ${isMalay ? 'rating' : 'ratings'})',
+                                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ] else ...[
                           const SizedBox(height: 6),
-                          Text(
-                              isMalay
-                                  ? 'Tekan gambar untuk tukar foto'
-                                  : 'Tap image to change photo',
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 13)),
+                          Text(isMalay ? 'Tekan gambar untuk tukar foto' : 'Tap image to change photo',
+                              style: const TextStyle(color: Colors.white70, fontSize: 13)),
                         ],
                       ],
                     ),
@@ -435,101 +364,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       children: [
-
-                        // ✅ Availability Toggle Card
+                        // Availability Toggle
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2))
-                            ],
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Row(
                               children: [
-                                // Icon status
                                 AnimatedContainer(
-                                  duration:
-                                      const Duration(milliseconds: 300),
-                                  width: 48,
-                                  height: 48,
+                                  duration: const Duration(milliseconds: 300),
+                                  width: 48, height: 48,
                                   decoration: BoxDecoration(
-                                    color: _isAvailable
-                                        ? Colors.green.withOpacity(0.1)
-                                        : Colors.grey.withOpacity(0.1),
+                                    color: _isAvailable ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
-                                    _isAvailable
-                                        ? Icons.volunteer_activism
-                                        : Icons.do_not_disturb_on_outlined,
-                                    color: _isAvailable
-                                        ? Colors.green
-                                        : Colors.grey,
-                                    size: 24,
+                                    _isAvailable ? Icons.volunteer_activism : Icons.do_not_disturb_on_outlined,
+                                    color: _isAvailable ? Colors.green : Colors.grey, size: 24,
                                   ),
                                 ),
                                 const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        isMalay
-                                            ? 'Status Ketersediaan'
-                                            : 'Availability Status',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            color: AppColors.textGrey),
-                                      ),
+                                      Text(isMalay ? 'Status Ketersediaan' : 'Availability Status',
+                                          style: TextStyle(fontSize: 13, color: AppColors.textGrey)),
                                       const SizedBox(height: 2),
                                       Text(
                                         _isAvailable
-                                            ? (isMalay
-                                                ? '🟢 Available — Sedia Membantu'
-                                                : '🟢 Available — Ready to Help')
-                                            : (isMalay
-                                                ? '⚫ Tidak Available'
-                                                : '⚫ Not Available'),
-                                        style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: _isAvailable
-                                                ? Colors.green
-                                                : AppColors.textGrey),
+                                            ? (isMalay ? '🟢 Available — Sedia Membantu' : '🟢 Available — Ready to Help')
+                                            : (isMalay ? '⚫ Tidak Available' : '⚫ Not Available'),
+                                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                                            color: _isAvailable ? Colors.green : AppColors.textGrey),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        isMalay
-                                            ? 'Hidupkan untuk terima notifikasi request baru'
-                                            : 'Turn on to receive new request notifications',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors.textGrey),
+                                        isMalay ? 'Hidupkan untuk terima notifikasi request baru' : 'Turn on to receive new request notifications',
+                                        style: TextStyle(fontSize: 11, color: AppColors.textGrey),
                                       ),
                                     ],
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                // Toggle switch
                                 _isUpdatingAvailability
-                                    ? const SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2))
-                                    : Switch(
-                                        value: _isAvailable,
-                                        activeColor: Colors.green,
-                                        onChanged: (_) =>
-                                            _toggleAvailability(isMalay),
-                                      ),
+                                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                                    : Switch(value: _isAvailable, activeColor: Colors.green, onChanged: (_) => _toggleAvailability(isMalay)),
                               ],
                             ),
                           ),
@@ -540,73 +424,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         // Info / Edit Fields
                         _buildCard(children: [
                           _isEditing
-                              ? _buildEditField(
-                                  icon: Icons.person_outline,
-                                  label: isMalay ? 'Nama' : 'Name',
-                                  controller: _nameController,
-                                  hint: isMalay
-                                      ? 'Masukkan nama anda'
-                                      : 'Enter your name')
-                              : _buildInfoRow(
-                                  icon: Icons.person_outline,
-                                  label: isMalay ? 'Nama' : 'Name',
-                                  value: _userData['name'] ??
-                                      user?.displayName ??
-                                      (isMalay
-                                          ? 'Tidak ditetapkan'
-                                          : 'Not set')),
+                              ? _buildEditField(icon: Icons.person_outline, label: isMalay ? 'Nama' : 'Name', controller: _nameController, hint: isMalay ? 'Masukkan nama anda' : 'Enter your name')
+                              : _buildInfoRow(icon: Icons.person_outline, label: isMalay ? 'Nama' : 'Name', value: _userData['name'] ?? user?.displayName ?? (isMalay ? 'Tidak ditetapkan' : 'Not set')),
                           const Divider(height: 1),
                           _isEditing
-                              ? _buildEditField(
-                                  icon: Icons.phone_outlined,
-                                  label: isMalay
-                                      ? 'No. Telefon'
-                                      : 'Phone Number',
-                                  controller: _phoneController,
-                                  hint: '0123456789',
-                                  keyboardType: TextInputType.phone)
-                              : _buildInfoRow(
-                                  icon: Icons.phone_outlined,
-                                  label: isMalay
-                                      ? 'No. Telefon'
-                                      : 'Phone Number',
-                                  value: _userData['num_phone'] ??
-                                      (isMalay
-                                          ? 'Tidak ditetapkan'
-                                          : 'Not set')),
+                              ? _buildEditField(icon: Icons.phone_outlined, label: isMalay ? 'No. Telefon' : 'Phone Number', controller: _phoneController, hint: '0123456789', keyboardType: TextInputType.phone)
+                              : _buildInfoRow(icon: Icons.phone_outlined, label: isMalay ? 'No. Telefon' : 'Phone Number', value: _userData['num_phone'] ?? (isMalay ? 'Tidak ditetapkan' : 'Not set')),
                           const Divider(height: 1),
-                          _buildInfoRow(
-                            icon: Icons.email_outlined,
-                            label: 'Email',
-                            value: user?.email ??
-                                (isMalay
-                                    ? 'Tidak ditetapkan'
-                                    : 'Not set'),
-                          ),
+                          _buildInfoRow(icon: Icons.email_outlined, label: 'Email', value: user?.email ?? (isMalay ? 'Tidak ditetapkan' : 'Not set')),
                           const Divider(height: 1),
                           _buildInfoRow(
                             icon: Icons.location_on_outlined,
                             label: isMalay ? 'Kawasan' : 'Area',
-                            value: _userArea.isEmpty
-                                ? (isMalay
-                                    ? 'Belum ditetapkan'
-                                    : 'Not set')
-                                : _userArea,
+                            value: _userArea.isEmpty ? (isMalay ? 'Belum ditetapkan' : 'Not set') : _userArea,
                             onTap: () async {
-                              final prefs =
-                                  await SharedPreferences.getInstance();
+                              final prefs = await SharedPreferences.getInstance();
                               await prefs.remove('user_area_id');
                               await prefs.remove('user_area_name');
                               if (!mounted) return;
-                              Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (_) =>
-                                              const SelectLocationScreen()))
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const SelectLocationScreen()))
                                   .then((_) => _loadUserData());
                             },
-                            trailing: Icon(Icons.chevron_right,
-                                color: AppColors.textGrey),
+                            trailing: Icon(Icons.chevron_right, color: AppColors.textGrey),
                           ),
                         ]),
 
@@ -615,41 +454,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _buildCard(children: [
                           _buildActionRow(
                             icon: Icons.settings_outlined,
-                            label:
-                                isMalay ? 'Tetapan' : 'Settings',
-                            subtitle: isMalay
-                                ? 'Notifikasi, privasi, tentang app'
-                                : 'Notifications, privacy, about app',
+                            label: isMalay ? 'Tetapan' : 'Settings',
+                            subtitle: isMalay ? 'Notifikasi, privasi, tentang app' : 'Notifications, privacy, about app',
                             color: AppColors.primaryBlue,
-                            onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) =>
-                                        const SettingsScreen())),
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
                           ),
                         ]),
 
                         const SizedBox(height: 16),
 
                         SizedBox(
-                          width: double.infinity,
-                          height: 54,
+                          width: double.infinity, height: 54,
                           child: OutlinedButton.icon(
                             onPressed: () => _logout(isMalay),
-                            icon: const Icon(Icons.logout,
-                                color: Colors.red),
-                            label: Text(
-                                isMalay ? 'Log Keluar' : 'Logout',
-                                style: const TextStyle(
-                                    color: Colors.red,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600)),
+                            icon: const Icon(Icons.logout, color: Colors.red),
+                            label: Text(isMalay ? 'Log Keluar' : 'Logout',
+                                style: const TextStyle(color: Colors.red, fontSize: 15, fontWeight: FontWeight.w600)),
                             style: OutlinedButton.styleFrom(
-                              side:
-                                  const BorderSide(color: Colors.red),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(12)),
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                           ),
                         ),
@@ -667,19 +490,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildStatChip(String count, String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
       child: Column(children: [
-        Text(count,
-            style: TextStyle(
-                color: color,
-                fontSize: 16,
-                fontWeight: FontWeight.bold)),
+        Text(count, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 2),
-        Text(label,
-            style:
-                const TextStyle(color: Colors.white70, fontSize: 11)),
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
       ]),
     );
   }
@@ -687,78 +502,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _buildCard({required List<Widget> children}) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
-        ],
+        color: Colors.white, borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(children: children),
     );
   }
 
-  Widget _buildInfoRow(
-      {required IconData icon,
-      required String label,
-      required String value,
-      VoidCallback? onTap,
-      Widget? trailing}) {
+  Widget _buildInfoRow({required IconData icon, required String label, required String value, VoidCallback? onTap, Widget? trailing}) {
     return ListTile(
       onTap: onTap,
       leading: Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-            color: AppColors.backgroundBlue,
-            borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(color: AppColors.backgroundBlue, borderRadius: BorderRadius.circular(8)),
         child: Icon(icon, size: 18, color: AppColors.primaryBlue),
       ),
-      title: Text(label,
-          style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
-      subtitle: Text(value,
-          style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textDark)),
+      title: Text(label, style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
+      subtitle: Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textDark)),
       trailing: trailing,
     );
   }
 
-  Widget _buildActionRow(
-      {required IconData icon,
-      required String label,
-      required String subtitle,
-      required Color color,
-      required VoidCallback onTap}) {
+  Widget _buildActionRow({required IconData icon, required String label, required String subtitle, required Color color, required VoidCallback onTap}) {
     return ListTile(
       onTap: onTap,
       leading: Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
         child: Icon(icon, size: 18, color: color),
       ),
-      title: Text(label,
-          style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textDark)),
-      subtitle: Text(subtitle,
-          style:
-              TextStyle(fontSize: 12, color: AppColors.textGrey)),
+      title: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textDark)),
+      subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
       trailing: Icon(Icons.chevron_right, color: AppColors.textGrey),
     );
   }
 
-  Widget _buildEditField(
-      {required IconData icon,
-      required String label,
-      required TextEditingController controller,
-      required String hint,
-      TextInputType? keyboardType}) {
+  Widget _buildEditField({required IconData icon, required String label, required TextEditingController controller, required String hint, TextInputType? keyboardType}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
@@ -766,9 +545,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-                color: AppColors.backgroundBlue,
-                borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: AppColors.backgroundBlue, borderRadius: BorderRadius.circular(8)),
             child: Icon(icon, size: 18, color: AppColors.primaryBlue),
           ),
           const SizedBox(width: 12),
@@ -776,29 +553,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 12, color: AppColors.textGrey)),
+                Text(label, style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
                 TextField(
-                  controller: controller,
-                  keyboardType: keyboardType,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textDark),
+                  controller: controller, keyboardType: keyboardType,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textDark),
                   decoration: InputDecoration(
                     hintText: hint,
-                    hintStyle: TextStyle(
-                        color: AppColors.textGrey, fontSize: 13),
-                    isDense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 4),
-                    border: UnderlineInputBorder(
-                        borderSide:
-                            BorderSide(color: AppColors.primaryBlue)),
-                    focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(
-                            color: AppColors.primaryBlue, width: 2)),
+                    hintStyle: TextStyle(color: AppColors.textGrey, fontSize: 13),
+                    isDense: true, contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                    border: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.primaryBlue)),
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.primaryBlue, width: 2)),
                   ),
                 ),
               ],
