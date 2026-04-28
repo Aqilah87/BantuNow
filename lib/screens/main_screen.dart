@@ -44,7 +44,6 @@ class _MainScreenState extends State<MainScreen> {
               Navigator.pop(ctx);
               Navigator.push(
                 context,
-                // ✅ Tiada canGoBack — user kena login untuk teruskan
                 MaterialPageRoute(
                     builder: (_) => const LoginScreen()),
               );
@@ -91,13 +90,18 @@ class _MainScreenState extends State<MainScreen> {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        // ✅ Tunjuk loading HANYA bila betul-betul tunggu — bukan bila dah ada data
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            snapshot.data == null &&
+            FirebaseAuth.instance.currentUser == null) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        final isLoggedIn = snapshot.data != null;
+        // ✅ Guna currentUser sebagai fallback — lebih reliable pada startup
+        final user = snapshot.data ?? FirebaseAuth.instance.currentUser;
+        final isLoggedIn = user != null;
 
         final screens = [
           const HomeScreen(),

@@ -161,7 +161,7 @@ class _RatingDialogState extends State<RatingDialog> {
     if (result['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(widget.isMalay ? '⭐ Rating berjaya dihantar!' : '⭐ Rating submitted!'),
-        backgroundColor: Colors.green,
+        backgroundColor: const Color.fromARGB(255, 197, 215, 197),
       ));
     }
   }

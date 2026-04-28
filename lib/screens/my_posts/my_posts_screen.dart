@@ -7,7 +7,7 @@ import '../../utils/colors.dart';
 import '../../models/bantuan_model.dart';
 import '../../services/bantuan_service.dart';
 import '../bantuan/bantuan_detail_screen.dart';
-import '../bantuan/post_bantuan_screen.dart'; // ✅ tambah import
+import '../bantuan/post_bantuan_screen.dart';
 
 class MyPostsScreen extends StatefulWidget {
   const MyPostsScreen({Key? key}) : super(key: key);
@@ -18,6 +18,50 @@ class MyPostsScreen extends StatefulWidget {
 
 class _MyPostsScreenState extends State<MyPostsScreen> {
   final _bantuanService = BantuanService();
+
+  @override
+  void initState() {
+    super.initState();
+    // ✅ Auto-close posts yang stuck in_progress > 7 hari
+    _bantuanService.checkAndAutoClose();
+  }
+
+  // ─── Status helpers ──────────────────────────────────────────────────────────
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'open':
+        return Colors.green;
+      case 'in_progress':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'open':
+        return 'Active';
+      case 'in_progress':
+        return 'In Progress';
+      default:
+        return 'Completed';
+    }
+  }
+
+  IconData _statusIcon(String status) {
+    switch (status) {
+      case 'open':
+        return Icons.circle;
+      case 'in_progress':
+        return Icons.handshake_outlined;
+      default:
+        return Icons.task_alt;
+    }
+  }
+
+  // ─── Build ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +111,8 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                  Icon(Icons.error_outline,
+                      size: 48, color: AppColors.error),
                   const SizedBox(height: 12),
                   Text('Ralat: ${snapshot.error}',
                       textAlign: TextAlign.center,
@@ -97,31 +142,46 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                   Text(
                     'Tekan butang + untuk post bantuan pertama anda!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 14, color: AppColors.textGrey),
+                    style:
+                        TextStyle(fontSize: 14, color: AppColors.textGrey),
                   ),
                 ],
               ),
             );
           }
 
-          final activePosts = posts.where((p) => p.status == 'open').length;
-          final completedPosts = posts.where((p) => p.status == 'closed').length;
+          // ✅ 3-status counts
+          final activePosts =
+              posts.where((p) => p.status == 'open').length;
+          final inProgressPosts =
+              posts.where((p) => p.status == 'in_progress').length;
+          final completedPosts =
+              posts.where((p) => p.status == 'closed').length;
 
           return Column(
             children: [
+              // ── Stats bar ────────────────────────────────────────────────
               Container(
                 color: AppColors.primaryBlue,
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                 child: Row(
                   children: [
-                    _buildStatChip('${posts.length}', 'Total', Colors.white),
-                    const SizedBox(width: 12),
-                    _buildStatChip('$activePosts', 'Active', Colors.green.shade300),
-                    const SizedBox(width: 12),
-                    _buildStatChip('$completedPosts', 'Completed', Colors.grey.shade300),
+                    _buildStatChip(
+                        '${posts.length}', 'Total', Colors.white),
+                    const SizedBox(width: 8),
+                    _buildStatChip(
+                        '$activePosts', 'Active', Colors.green.shade300),
+                    const SizedBox(width: 8),
+                    _buildStatChip('$inProgressPosts', 'In Progress',
+                        Colors.orange.shade300),
+                    const SizedBox(width: 8),
+                    _buildStatChip('$completedPosts', 'Done',
+                        Colors.grey.shade300),
                   ],
                 ),
               ),
+
+              // ── Post list ────────────────────────────────────────────────
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.all(16),
@@ -139,31 +199,37 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
 
   Widget _buildStatChip(String count, String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(count,
               style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-          const SizedBox(width: 6),
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: color)),
+          const SizedBox(width: 5),
           Text(label,
-              style: const TextStyle(fontSize: 12, color: Colors.white70)),
+              style: const TextStyle(
+                  fontSize: 11, color: Colors.white70)),
         ],
       ),
     );
   }
 
   Widget _buildPostCard(BuildContext context, BantuanModel post) {
-    final isActive = post.status == 'open';
-    final statusColor = isActive ? Colors.green : Colors.grey;
-    final statusLabel = isActive ? 'Active' : 'Completed';
+    final statusColor = _statusColor(post.status);
+    final statusLabel = _statusLabel(post.status);
+    final statusIcon = _statusIcon(post.status);
     final isRequest = post.type == 'request';
     final typeColor = isRequest ? Colors.orange : Colors.green;
     final typeLabel = isRequest ? 'Request' : 'Offer';
+    final isOpen = post.status == 'open';
+    final isInProgress = post.status == 'in_progress';
 
     return GestureDetector(
       onTap: () {
@@ -192,6 +258,7 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
         ),
         child: Column(
           children: [
+            // ── Post image ─────────────────────────────────────────────
             if (post.imageUrl != null)
               ClipRRect(
                 borderRadius:
@@ -204,11 +271,13 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                   errorBuilder: (_, __, ___) => const SizedBox(),
                 ),
               ),
+
             Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Chips row ─────────────────────────────────────────
                   Row(
                     children: [
                       Container(
@@ -235,23 +304,26 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                         child: Text(
                           '${BantuanCategories.getCategoryIcon(post.category)} ${BantuanCategories.getCategoryName(post.category).split(' / ')[0]}',
                           style: TextStyle(
-                              fontSize: 11, color: AppColors.primaryBlue),
+                              fontSize: 11,
+                              color: AppColors.primaryBlue),
                         ),
                       ),
                       const Spacer(),
+                      // ✅ Status chip with dynamic color
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: statusColor.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border:
-                              Border.all(color: statusColor.withOpacity(0.3)),
+                          border: Border.all(
+                              color: statusColor.withOpacity(0.3)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.circle, size: 8, color: statusColor),
+                            Icon(statusIcon,
+                                size: 8, color: statusColor),
                             const SizedBox(width: 4),
                             Text(statusLabel,
                                 style: TextStyle(
@@ -283,7 +355,8 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                       const SizedBox(width: 2),
                       Text(post.area,
                           style: TextStyle(
-                              fontSize: 12, color: AppColors.primaryBlue)),
+                              fontSize: 12,
+                              color: AppColors.primaryBlue)),
                       const Spacer(),
                       Icon(Icons.access_time,
                           size: 12, color: AppColors.textGrey),
@@ -294,34 +367,72 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                     ],
                   ),
 
+                  // ✅ In-progress helper info sub-row
+                  if (isInProgress && post.helperName != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.07),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.handshake_outlined,
+                            size: 13, color: Colors.orange),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Helper: ${post.helperName}',
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.orange),
+                        ),
+                        if (post.helperConfirmed) ...[
+                          const Spacer(),
+                          const Icon(Icons.check_circle,
+                              size: 13, color: Colors.green),
+                          const SizedBox(width: 4),
+                          const Text('Confirmed',
+                              style: TextStyle(
+                                  fontSize: 11, color: Colors.green)),
+                        ],
+                      ]),
+                    ),
+                  ],
+
                   const SizedBox(height: 12),
                   const Divider(height: 1),
                   const SizedBox(height: 8),
 
-                  // ✅ Action buttons — edit button sekarang buka EditScreen
+                  // ── Action buttons ────────────────────────────────────
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      IconButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  PostBantuanScreen(existingPost: post), // ✅
-                            ),
-                          );
-                        },
-                        icon: Icon(Icons.edit_outlined,
-                            color: AppColors.primaryBlue, size: 20),
-                        style: IconButton.styleFrom(
-                          backgroundColor: AppColors.backgroundBlue,
-                          padding: const EdgeInsets.all(8),
+                      // Edit — only when open
+                      if (isOpen) ...[
+                        IconButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PostBantuanScreen(
+                                    existingPost: post),
+                              ),
+                            );
+                          },
+                          icon: Icon(Icons.edit_outlined,
+                              color: AppColors.primaryBlue, size: 20),
+                          style: IconButton.styleFrom(
+                            backgroundColor: AppColors.backgroundBlue,
+                            padding: const EdgeInsets.all(8),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
+                        const SizedBox(width: 8),
+                      ],
+
+                      // Delete
                       IconButton(
-                        onPressed: () => _confirmDelete(context, post),
+                        onPressed: () =>
+                            _confirmDelete(context, post),
                         icon: const Icon(Icons.delete_outline,
                             color: Colors.red, size: 20),
                         style: IconButton.styleFrom(
@@ -329,17 +440,31 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                           padding: const EdgeInsets.all(8),
                         ),
                       ),
-                      if (isActive) ...[
+
+                      // ✅ "Selesai & Rate" — only owner when helper confirmed
+                      if (isInProgress && post.helperConfirmed) ...[
                         const SizedBox(width: 8),
                         TextButton.icon(
-                          onPressed: () => _confirmComplete(context, post),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BantuanDetailScreen(
+                                  bantuan: post,
+                                  onLoginRequired: (_) {},
+                                  isLoggedIn: true,
+                                ),
+                              ),
+                            );
+                          },
                           icon: const Icon(Icons.task_alt,
                               color: Colors.green, size: 16),
-                          label: const Text('Complete',
-                              style:
-                                  TextStyle(color: Colors.green, fontSize: 12)),
+                          label: const Text('Rate & Close',
+                              style: TextStyle(
+                                  color: Colors.green, fontSize: 12)),
                           style: TextButton.styleFrom(
-                            backgroundColor: Colors.green.withOpacity(0.1),
+                            backgroundColor:
+                                Colors.green.withOpacity(0.1),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8)),
                             padding: const EdgeInsets.symmetric(
@@ -358,12 +483,13 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, BantuanModel post) async {
+  Future<void> _confirmDelete(
+      BuildContext context, BantuanModel post) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
         title: const Text('Padam Post?'),
         content: const Text('Tindakan ini tidak boleh dibatalkan.'),
         actions: [
@@ -372,9 +498,10 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
               child: const Text('Batal')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child:
-                const Text('Padam', style: TextStyle(color: Colors.white)),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Padam',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -400,41 +527,6 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
           SnackBar(content: Text('Gagal memadam: $e')),
         );
       }
-    }
-  }
-
-  Future<void> _confirmComplete(
-      BuildContext context, BantuanModel post) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Tandakan Selesai?'),
-        content: const Text('Post akan ditutup dan tidak dipaparkan lagi.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text('Ya, Selesai',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    await _bantuanService.closeBantuan(post.id);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('✅ Post ditandakan selesai!'),
-            backgroundColor: Colors.green),
-      );
     }
   }
 

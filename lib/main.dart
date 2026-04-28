@@ -48,7 +48,6 @@ class _BantuNowAppState extends State<BantuNowApp> {
         ),
         home: const SplashScreen(),
         builder: (context, child) {
-          // ✅ Init notification service selepas app ready
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _notificationService.init(_deepLinkService.navigatorKey!);
           });

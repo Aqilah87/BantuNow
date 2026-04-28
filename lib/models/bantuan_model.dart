@@ -9,7 +9,7 @@ class BantuanModel {
   final String category;
   final String area;
   final String areaId;
-  final String status;
+  final String status; // 'open' | 'in_progress' | 'closed'
   final String type;
   final String postedBy;
   final String postedByUid;
@@ -18,6 +18,11 @@ class BantuanModel {
   final DateTime createdAt;
   final double? latitude;
   final double? longitude;
+
+  // ✅ Helper tracking fields
+  final String? helperUid;
+  final String? helperName;
+  final bool helperConfirmed; // true bila helper tekan "Saya Dah Bantu"
 
   BantuanModel({
     required this.id,
@@ -35,6 +40,9 @@ class BantuanModel {
     required this.createdAt,
     this.latitude,
     this.longitude,
+    this.helperUid,
+    this.helperName,
+    this.helperConfirmed = false,
   });
 
   factory BantuanModel.fromMap(Map<String, dynamic> map, String id) {
@@ -56,10 +64,12 @@ class BantuanModel {
           : DateTime.now(),
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
+      helperUid: map['helper_uid'],
+      helperName: map['helper_name'],
+      helperConfirmed: map['helper_confirmed'] ?? false,
     );
   }
 
-  // ✅ Semua guna snake_case — consistent dengan Firestore
   Map<String, dynamic> toMap() {
     return {
       'title': title,
@@ -75,6 +85,9 @@ class BantuanModel {
       if (imageUrl != null) 'image_url': imageUrl,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
+      if (helperUid != null) 'helper_uid': helperUid,
+      if (helperName != null) 'helper_name': helperName,
+      'helper_confirmed': helperConfirmed,
     };
   }
 }

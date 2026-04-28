@@ -19,31 +19,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notifEnabled = true;
-  bool _notifNewRequest = true;
-  bool _notifMatchFound = true;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPrefs();
-  }
-
-  Future<void> _loadPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _notifEnabled = prefs.getBool('notif_enabled') ?? true;
-      _notifNewRequest = prefs.getBool('notif_new_request') ?? true;
-      _notifMatchFound = prefs.getBool('notif_match_found') ?? true;
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _savePref(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
-  }
 
   Future<void> _logout(AppStrings s) async {
     final confirm = await showDialog<bool>(
@@ -333,272 +308,167 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 fontWeight: FontWeight.bold,
                 fontSize: 18)),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
 
-                  // ── Language Toggle ───────────────────────────────────
-                  _buildSectionLabel(s.language),
-                  _buildCard(children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
+            // ── Language Toggle ─────────────────────────────────────
+            _buildSectionLabel(s.language),
+            _buildCard(children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.backgroundBlue,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.language,
+                          size: 18, color: AppColors.primaryBlue),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppColors.backgroundBlue,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(Icons.language,
-                                size: 18, color: AppColors.primaryBlue),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(s.language.replaceAll('🌐 ', ''),
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        color: AppColors.textDark)),
-                                Text(s.languageDesc,
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textGrey)),
-                              ],
-                            ),
-                          ),
-                          // ✅ Language toggle chips
-                          Row(
-                            children: [
-                              _buildLangChip(
-                                label: 'BM',
-                                isSelected: langProvider.isMalay,
-                                onTap: () => langProvider.setMalay(),
-                              ),
-                              const SizedBox(width: 8),
-                              _buildLangChip(
-                                label: 'EN',
-                                isSelected: !langProvider.isMalay,
-                                onTap: () => langProvider.setEnglish(),
-                              ),
-                            ],
-                          ),
+                          Text(s.language.replaceAll('🌐 ', ''),
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textDark)),
+                          Text(s.languageDesc,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textGrey)),
                         ],
                       ),
                     ),
-                  ]),
-
-                  const SizedBox(height: 16),
-
-                  // ── Notification Settings ─────────────────────────────
-                  _buildSectionLabel(s.notificationSettings),
-                  _buildCard(children: [
-                    SwitchListTile(
-                      secondary: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.backgroundBlue,
-                          borderRadius: BorderRadius.circular(8),
+                    Row(
+                      children: [
+                        _buildLangChip(
+                          label: 'BM',
+                          isSelected: langProvider.isMalay,
+                          onTap: () => langProvider.setMalay(),
                         ),
-                        child: Icon(Icons.notifications_outlined,
-                            size: 18, color: AppColors.primaryBlue),
-                      ),
-                      title: Text(s.enableNotifications,
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textDark)),
-                      subtitle: Text(s.enableNotificationsDesc,
-                          style: TextStyle(
-                              fontSize: 12, color: AppColors.textGrey)),
-                      value: _notifEnabled,
-                      activeColor: AppColors.primaryBlue,
-                      onChanged: (val) {
-                        setState(() => _notifEnabled = val);
-                        _savePref('notif_enabled', val);
-                      },
-                    ),
-                    const Divider(height: 1, indent: 16),
-                    SwitchListTile(
-                      secondary: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                        const SizedBox(width: 8),
+                        _buildLangChip(
+                          label: 'EN',
+                          isSelected: !langProvider.isMalay,
+                          onTap: () => langProvider.setEnglish(),
                         ),
-                        child: const Icon(Icons.pan_tool,
-                            size: 18, color: Colors.orange),
-                      ),
-                      title: Text(s.newRequestAlert,
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: _notifEnabled
-                                  ? AppColors.textDark
-                                  : AppColors.textGrey)),
-                      subtitle: Text(s.newRequestAlertDesc,
-                          style: TextStyle(
-                              fontSize: 12, color: AppColors.textGrey)),
-                      value: _notifEnabled && _notifNewRequest,
-                      activeColor: Colors.orange,
-                      onChanged: _notifEnabled
-                          ? (val) {
-                              setState(() => _notifNewRequest = val);
-                              _savePref('notif_new_request', val);
-                            }
-                          : null,
+                      ],
                     ),
-                    const Divider(height: 1, indent: 16),
-                    SwitchListTile(
-                      secondary: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(Icons.handshake_outlined,
-                            size: 18, color: Colors.green),
-                      ),
-                      title: Text(s.matchFoundAlert,
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: _notifEnabled
-                                  ? AppColors.textDark
-                                  : AppColors.textGrey)),
-                      subtitle: Text(s.matchFoundAlertDesc,
-                          style: TextStyle(
-                              fontSize: 12, color: AppColors.textGrey)),
-                      value: _notifEnabled && _notifMatchFound,
-                      activeColor: Colors.green,
-                      onChanged: _notifEnabled
-                          ? (val) {
-                              setState(() => _notifMatchFound = val);
-                              _savePref('notif_match_found', val);
-                            }
-                          : null,
-                    ),
-                  ]),
+                  ],
+                ),
+              ),
+            ]),
 
-                  const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-                  // ── Location Settings ─────────────────────────────────
-                  _buildSectionLabel(s.locationSettings),
-                  _buildCard(children: [
-                    _buildTile(
-                      icon: Icons.edit_location_alt_outlined,
-                      label: s.changeHomeArea,
-                      subtitle: s.changeHomeAreaDesc,
-                      color: AppColors.primaryBlue,
-                      onTap: () async {
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.remove('user_area_id');
-                        await prefs.remove('user_area_name');
-                        if (!mounted) return;
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const SelectLocationScreen()),
-                        );
-                      },
-                    ),
-                    const Divider(height: 1, indent: 16),
-                    _buildTile(
-                      icon: Icons.gps_fixed,
-                      label: s.locationPermission,
-                      subtitle: s.locationPermissionDesc,
-                      color: Colors.teal,
-                      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(s.locationPermissionMsg)),
-                      ),
-                    ),
-                  ]),
+            // ── Location Settings ───────────────────────────────────
+            _buildSectionLabel(s.locationSettings),
+            _buildCard(children: [
+              _buildTile(
+                icon: Icons.edit_location_alt_outlined,
+                label: s.changeHomeArea,
+                subtitle: s.changeHomeAreaDesc,
+                color: AppColors.primaryBlue,
+                onTap: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.remove('user_area_id');
+                  await prefs.remove('user_area_name');
+                  if (!mounted) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const SelectLocationScreen()),
+                  );
+                },
+              ),
+            ]),
 
-                  const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-                  // ── Privacy ───────────────────────────────────────────
-                  _buildSectionLabel(s.privacySecurity),
-                  _buildCard(children: [
-                    _buildTile(
-                      icon: Icons.privacy_tip_outlined,
-                      label: s.privacyPolicy,
-                      subtitle: s.privacyPolicyDesc,
-                      color: Colors.indigo,
-                      onTap: () => _showPrivacyDialog(s),
-                    ),
-                    const Divider(height: 1, indent: 16),
-                    _buildTile(
-                      icon: Icons.lock_reset,
-                      label: s.changePassword,
-                      subtitle: s.changePasswordDesc,
-                      color: Colors.deepOrange,
-                      onTap: () => _sendPasswordReset(s),
-                    ),
-                  ]),
+            // ── Privacy & Security ──────────────────────────────────
+            _buildSectionLabel(s.privacySecurity),
+            _buildCard(children: [
+              _buildTile(
+                icon: Icons.privacy_tip_outlined,
+                label: s.privacyPolicy,
+                subtitle: s.privacyPolicyDesc,
+                color: Colors.indigo,
+                onTap: () => _showPrivacyDialog(s),
+              ),
+              const Divider(height: 1, indent: 16),
+              _buildTile(
+                icon: Icons.lock_reset,
+                label: s.changePassword,
+                subtitle: s.changePasswordDesc,
+                color: Colors.deepOrange,
+                onTap: () => _sendPasswordReset(s),
+              ),
+            ]),
 
-                  const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-                  // ── About & Help ──────────────────────────────────────
-                  _buildSectionLabel(s.aboutHelp),
-                  _buildCard(children: [
-                    _buildTile(
-                      icon: Icons.help_outline,
-                      label: s.helpFAQ,
-                      subtitle: s.helpFAQDesc,
-                      color: Colors.purple,
-                      onTap: () => _showFAQ(s),
-                    ),
-                    const Divider(height: 1, indent: 16),
-                    _buildTile(
-                      icon: Icons.article_outlined,
-                      label: s.termsConditions,
-                      subtitle: s.termsConditionsDesc,
-                      color: Colors.brown,
-                      onTap: () => _showTermsDialog(s),
-                    ),
-                    const Divider(height: 1, indent: 16),
-                    _buildTile(
-                      icon: Icons.info_outline,
-                      label: s.aboutApp,
-                      subtitle: s.aboutAppDesc,
-                      color: AppColors.primaryBlue,
-                      onTap: () => _showAboutDialog(s),
-                    ),
-                  ]),
+            // ── About & Help ────────────────────────────────────────
+            _buildSectionLabel(s.aboutHelp),
+            _buildCard(children: [
+              _buildTile(
+                icon: Icons.help_outline,
+                label: s.helpFAQ,
+                subtitle: s.helpFAQDesc,
+                color: Colors.purple,
+                onTap: () => _showFAQ(s),
+              ),
+              const Divider(height: 1, indent: 16),
+              _buildTile(
+                icon: Icons.article_outlined,
+                label: s.termsConditions,
+                subtitle: s.termsConditionsDesc,
+                color: Colors.brown,
+                onTap: () => _showTermsDialog(s),
+              ),
+              const Divider(height: 1, indent: 16),
+              _buildTile(
+                icon: Icons.info_outline,
+                label: s.aboutApp,
+                subtitle: s.aboutAppDesc,
+                color: AppColors.primaryBlue,
+                onTap: () => _showAboutDialog(s),
+              ),
+            ]),
 
-                  const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-                  // ── Logout ────────────────────────────────────────────
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _logout(s),
-                      icon: const Icon(Icons.logout, color: Colors.red),
-                      label: Text(s.logout,
-                          style: const TextStyle(
-                              color: Colors.red,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.red),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-                ],
+            // ── Logout ──────────────────────────────────────────────
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: OutlinedButton.icon(
+                onPressed: () => _logout(s),
+                icon: const Icon(Icons.logout, color: Colors.red),
+                label: Text(s.logout,
+                    style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ),
+
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
     );
   }
 

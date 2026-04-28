@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/colors.dart';
 import 'onboarding_screen.dart';
@@ -29,7 +30,6 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (!mounted) return;
 
-    // Belum tengok onboarding
     if (!hasSeenOnboarding) {
       Navigator.pushReplacement(
         context,
@@ -38,8 +38,30 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
-    // ✅ Tunggu Firebase Auth state settled dulu
-    await FirebaseAuth.instance.authStateChanges().first;
+    // ✅ Cuba silent sign in untuk refresh Google session
+    // Ini penting sebab Google Sign In session expire bila app restart
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+
+    if (firebaseUser != null) {
+      // User ada dalam Firebase — cuba refresh Google session secara silent
+      try {
+        final googleSignIn = GoogleSignIn();
+        final googleUser = await googleSignIn.signInSilently();
+
+        if (googleUser != null) {
+          // ✅ Berjaya refresh — update Firebase credential
+          final googleAuth = await googleUser.authentication;
+          final credential = GoogleAuthProvider.credential(
+            accessToken: googleAuth.accessToken,
+            idToken: googleAuth.idToken,
+          );
+          await FirebaseAuth.instance.signInWithCredential(credential);
+        }
+        // Kalau googleUser null, Firebase token masih valid — teruskan je
+      } catch (_) {
+        // Silent fail — kalau gagal, biarkan Firebase handle sendiri
+      }
+    }
 
     if (!mounted) return;
 
