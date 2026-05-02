@@ -1,4 +1,10 @@
 // lib/screens/home/home_screen.dart
+//
+// CHANGES dari versi sebelum:
+// - Semua filter/sort state dipindahkan ke BantuanProvider
+// - setState() untuk filter/sort digantikan dengan provider methods
+// - _loadUserArea() digantikan dengan provider.loadUserAreaAndLocation()
+// - UI output TIDAK BERUBAH — sama seperti sebelum
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,10 +13,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../utils/colors.dart';
 import '../../providers/language_provider.dart';
+import '../../providers/bantuan_provider.dart'; // ✅ tambah import provider
 import '../../services/auth_service.dart';
-import '../../services/bantuan_service.dart';
 import '../../services/geospatial_service.dart';
-import '../../services/location_service.dart';
 import '../../models/bantuan_model.dart';
 import '../auth/login_screen.dart';
 import '../location/select_location_screen.dart';
@@ -27,39 +32,17 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _authService = AuthService();
-  final _bantuanService = BantuanService();
 
-  String _userArea = '';
-  String _userAreaId = '';
-  String _selectedType = 'all';
-  Set<String> _selectedCategories = {};
-  bool _filterByArea = false;
-
-  double? _userLat;
-  double? _userLon;
-  bool _sortByNearest = false;
-  bool _sortByRanking = false;
+  // ✅ _bantuanService dibuang — provider handle service calls
+  // ✅ Semua filter/sort state dibuang — dipindahkan ke BantuanProvider
 
   @override
   void initState() {
     super.initState();
-    _loadUserArea();
-  }
-
-  Future<void> _loadUserArea() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _userArea = prefs.getString('user_area_name') ?? '';
-      _userAreaId = prefs.getString('user_area_id') ?? '';
+    // ✅ Load area dan location melalui provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<BantuanProvider>().loadUserAreaAndLocation();
     });
-
-    final location = await LocationService.getBestLocation();
-    if (location != null && mounted) {
-      setState(() {
-        _userLat = location['lat'];
-        _userLon = location['lon'];
-      });
-    }
   }
 
   bool get _isLoggedIn => FirebaseAuth.instance.currentUser != null;
@@ -96,7 +79,10 @@ class _HomeScreenState extends State<HomeScreen> {
               Navigator.pop(ctx);
               Navigator.push(context,
                   MaterialPageRoute(builder: (_) => const LoginScreen()))
-                  .then((_) => _loadUserArea());
+                  .then((_) {
+                // ✅ Reload area selepas login
+                context.read<BantuanProvider>().loadUserAreaAndLocation();
+              });
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryBlue,
@@ -137,7 +123,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showCategoryFilter(bool isMalay) {
-    Set<String> tempSelected = Set.from(_selectedCategories);
+    // ✅ Ambil selected categories dari provider
+    final provider = context.read<BantuanProvider>();
+    Set<String> tempSelected = Set.from(provider.selectedCategories);
 
     showModalBottomSheet(
       context: context,
@@ -212,7 +200,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   width: double.infinity, height: 50,
                   child: ElevatedButton(
                     onPressed: () {
-                      setState(() => _selectedCategories = tempSelected);
+                      // ✅ Update provider dengan categories yang dipilih
+                      context.read<BantuanProvider>().setSelectedCategories(tempSelected);
                       Navigator.pop(ctx);
                     },
                     style: ElevatedButton.styleFrom(
@@ -239,22 +228,25 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isMalay = context.watch<LanguageProvider>().isMalay;
+    // ✅ Watch provider untuk rebuild bila state berubah
+    final provider = context.watch<BantuanProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: _buildAppBar(isMalay),
       body: RefreshIndicator(
-        onRefresh: _loadUserArea,
+        // ✅ Refresh guna provider method
+        onRefresh: () => provider.loadUserAreaAndLocation(),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeader(isMalay),
-              _buildTypeFilter(isMalay),
-              _buildAreaFilterBar(isMalay),
-              _buildCategoryFilterBar(isMalay),
-              _buildBantuanList(isMalay),
+              _buildHeader(isMalay, provider),
+              _buildTypeFilter(isMalay, provider),
+              _buildAreaFilterBar(isMalay, provider),
+              _buildCategoryFilterBar(isMalay, provider),
+              _buildBantuanList(isMalay, provider),
               const SizedBox(height: 80),
             ],
           ),
@@ -302,8 +294,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ✅ _buildHeader dengan privacy indicator
-  Widget _buildHeader(bool isMalay) {
+  // ✅ Terima provider sebagai parameter — UI output sama seperti sebelum
+  Widget _buildHeader(bool isMalay, BantuanProvider provider) {
     return Container(
       color: AppColors.primaryBlue,
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
@@ -321,7 +313,8 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               const Icon(Icons.location_on, color: Colors.white70, size: 16),
               const SizedBox(width: 4),
-              Text(_userArea.isEmpty ? 'Kuala Terengganu' : _userArea,
+              // ✅ Guna provider.userArea
+              Text(provider.userArea.isEmpty ? 'Kuala Terengganu' : provider.userArea,
                   style: const TextStyle(color: Colors.white70, fontSize: 13)),
               if (_isLoggedIn) ...[
                 const SizedBox(width: 8),
@@ -333,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (!mounted) return;
                     Navigator.push(context,
                         MaterialPageRoute(builder: (_) => const SelectLocationScreen()))
-                        .then((_) => _loadUserArea());
+                        .then((_) => context.read<BantuanProvider>().reloadArea());
                   },
                   child: Text(isMalay ? '(Tukar)' : '(Change)',
                       style: const TextStyle(
@@ -344,7 +337,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          // Search bar
           Container(
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
             child: TextField(
@@ -357,7 +349,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          // ✅ Privacy indicator
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -385,7 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTypeFilter(bool isMalay) {
+  Widget _buildTypeFilter(bool isMalay, BantuanProvider provider) {
     final types = [
       {'id': 'all', 'label': isMalay ? 'Semua' : 'All'},
       {'id': 'request', 'label': '🙋 Request'},
@@ -396,10 +387,12 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: types.map((type) {
-          final isSelected = _selectedType == type['id'];
+          // ✅ Guna provider.selectedType
+          final isSelected = provider.selectedType == type['id'];
           return Expanded(
             child: GestureDetector(
-              onTap: () => setState(() => _selectedType = type['id']!),
+              // ✅ Guna provider.setSelectedType()
+              onTap: () => context.read<BantuanProvider>().setSelectedType(type['id']!),
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -420,8 +413,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildAreaFilterBar(bool isMalay) {
-    if (_userAreaId.isEmpty) return const SizedBox.shrink();
+  Widget _buildAreaFilterBar(bool isMalay, BantuanProvider provider) {
+    if (provider.userAreaId.isEmpty) return const SizedBox.shrink();
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -433,25 +426,26 @@ class _HomeScreenState extends State<HomeScreen> {
               style: TextStyle(fontSize: 12, color: AppColors.textGrey)),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: () => setState(() => _filterByArea = !_filterByArea),
+            // ✅ Guna provider.setFilterByArea()
+            onTap: () => context.read<BantuanProvider>().setFilterByArea(!provider.filterByArea),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: _filterByArea ? AppColors.primaryBlue : AppColors.backgroundBlue,
+                color: provider.filterByArea ? AppColors.primaryBlue : AppColors.backgroundBlue,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _filterByArea ? AppColors.primaryBlue : AppColors.lightGrey),
+                border: Border.all(color: provider.filterByArea ? AppColors.primaryBlue : AppColors.lightGrey),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(_filterByArea ? Icons.check_circle : Icons.radio_button_unchecked,
-                      size: 14, color: _filterByArea ? Colors.white : AppColors.primaryBlue),
+                  Icon(provider.filterByArea ? Icons.check_circle : Icons.radio_button_unchecked,
+                      size: 14, color: provider.filterByArea ? Colors.white : AppColors.primaryBlue),
                   const SizedBox(width: 4),
-                  Text(_userArea,
+                  Text(provider.userArea,
                       style: TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w600,
-                          color: _filterByArea ? Colors.white : AppColors.primaryBlue)),
+                          color: provider.filterByArea ? Colors.white : AppColors.primaryBlue)),
                 ],
               ),
             ),
@@ -461,8 +455,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCategoryFilterBar(bool isMalay) {
-    final hasFilter = _selectedCategories.isNotEmpty;
+  Widget _buildCategoryFilterBar(bool isMalay, BantuanProvider provider) {
+    final hasFilter = provider.selectedCategories.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Row(
@@ -483,7 +477,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Icon(Icons.tune, size: 16, color: hasFilter ? Colors.white : AppColors.primaryBlue),
                   const SizedBox(width: 6),
                   Text(
-                    hasFilter ? 'Filter (${_selectedCategories.length})' : (isMalay ? 'Kategori' : 'Category'),
+                    hasFilter ? 'Filter (${provider.selectedCategories.length})' : (isMalay ? 'Kategori' : 'Category'),
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                         color: hasFilter ? Colors.white : AppColors.primaryBlue),
                   ),
@@ -492,30 +486,29 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          if (_userLat != null) ...[
+          // ✅ Nearest & Best Match buttons — guna provider.userLat untuk check availability
+          if (provider.userLat != null) ...[
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => setState(() {
-                _sortByNearest = !_sortByNearest;
-                if (_sortByNearest) _sortByRanking = false;
-              }),
+              // ✅ Guna provider.setSortByNearest()
+              onTap: () => context.read<BantuanProvider>().setSortByNearest(!provider.sortByNearest),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 decoration: BoxDecoration(
-                  color: _sortByNearest ? Colors.orange : Colors.white,
+                  color: provider.sortByNearest ? Colors.orange : Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _sortByNearest ? Colors.orange : AppColors.lightGrey),
+                  border: Border.all(color: provider.sortByNearest ? Colors.orange : AppColors.lightGrey),
                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4)],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.near_me, size: 16, color: _sortByNearest ? Colors.white : Colors.orange),
+                    Icon(Icons.near_me, size: 16, color: provider.sortByNearest ? Colors.white : Colors.orange),
                     const SizedBox(width: 6),
                     Text(isMalay ? 'Terdekat' : 'Nearest',
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-                            color: _sortByNearest ? Colors.white : Colors.orange)),
+                            color: provider.sortByNearest ? Colors.white : Colors.orange)),
                   ],
                 ),
               ),
@@ -523,27 +516,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () => setState(() {
-                _sortByRanking = !_sortByRanking;
-                if (_sortByRanking) _sortByNearest = false;
-              }),
+              // ✅ Guna provider.setSortByRanking()
+              onTap: () => context.read<BantuanProvider>().setSortByRanking(!provider.sortByRanking),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 decoration: BoxDecoration(
-                  color: _sortByRanking ? Colors.purple : Colors.white,
+                  color: provider.sortByRanking ? Colors.purple : Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _sortByRanking ? Colors.purple : AppColors.lightGrey),
+                  border: Border.all(color: provider.sortByRanking ? Colors.purple : AppColors.lightGrey),
                   boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4)],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.auto_awesome, size: 16, color: _sortByRanking ? Colors.white : Colors.purple),
+                    Icon(Icons.auto_awesome, size: 16, color: provider.sortByRanking ? Colors.white : Colors.purple),
                     const SizedBox(width: 6),
                     Text(isMalay ? 'Terbaik' : 'Best Match',
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-                            color: _sortByRanking ? Colors.white : Colors.purple)),
+                            color: provider.sortByRanking ? Colors.white : Colors.purple)),
                   ],
                 ),
               ),
@@ -565,7 +556,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Text(isMalay ? 'Semua Kategori' : 'All Categories',
                           style: TextStyle(fontSize: 12, color: AppColors.primaryBlue)),
                     ),
-                  ..._selectedCategories.map((id) {
+                  ...provider.selectedCategories.map((id) {
                     final cat = BantuanCategories.categories.firstWhere(
                         (c) => c['id'] == id, orElse: () => {'id': id, 'name': id, 'icon': '📌'});
                     return Container(
@@ -585,7 +576,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: TextStyle(fontSize: 12, color: AppColors.primaryBlue, fontWeight: FontWeight.w500)),
                           const SizedBox(width: 4),
                           GestureDetector(
-                            onTap: () => setState(() => _selectedCategories.remove(id)),
+                            // ✅ Guna provider.removeCategory()
+                            onTap: () => context.read<BantuanProvider>().removeCategory(id),
                             child: Icon(Icons.close, size: 14, color: AppColors.primaryBlue),
                           ),
                         ],
@@ -601,12 +593,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildBantuanList(bool isMalay) {
+  Widget _buildBantuanList(bool isMalay, BantuanProvider provider) {
     return StreamBuilder<List<BantuanModel>>(
-      stream: _bantuanService.getBantuanStream(
-        type: _selectedType == 'all' ? null : _selectedType,
-        category: null,
-      ),
+      // ✅ Guna provider.bantuanStream
+      stream: provider.bantuanStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()));
@@ -623,27 +613,8 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        var list = snapshot.data ?? [];
-
-        if (_filterByArea && _userAreaId.isNotEmpty) {
-          list = list.where((p) => p.areaId == _userAreaId).toList();
-        }
-
-        if (_selectedCategories.isNotEmpty) {
-          list = list.where((p) => _selectedCategories.contains(p.category)).toList();
-        }
-
-        if (_sortByNearest && _userLat != null && _userLon != null) {
-          list = GeospatialService.nearestNeighbour(
-            posts: list, userLat: _userLat!, userLon: _userLon!);
-        }
-
-        if (_sortByRanking && _userLat != null && _userLon != null) {
-          final ranked = GeospatialService.rankPosts(
-            posts: list, userLat: _userLat!, userLon: _userLon!,
-            preferredCategories: _selectedCategories);
-          list = ranked.map((r) => r.post).toList();
-        }
+        // ✅ Apply filter & sort melalui provider method
+        final list = provider.applyFiltersAndSort(snapshot.data ?? []);
 
         if (list.isEmpty) {
           return Padding(
@@ -656,18 +627,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text(isMalay ? 'Tiada bantuan dijumpai' : 'No help found',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AppColors.textGrey, fontSize: 16)),
-                  if (_filterByArea || _selectedCategories.isNotEmpty) ...[
+                  if (provider.filterByArea || provider.selectedCategories.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     TextButton.icon(
-                      onPressed: () => setState(() {
-                        _selectedCategories.clear();
-                        _filterByArea = false;
-                      }),
+                      // ✅ Guna provider.clearAllFilters()
+                      onPressed: () => context.read<BantuanProvider>().clearAllFilters(),
                       icon: const Icon(Icons.clear, size: 16),
                       label: Text(isMalay ? 'Kosongkan Filter' : 'Clear Filter'),
                     ),
                   ],
-                  if (_isLoggedIn && !_filterByArea && _selectedCategories.isEmpty) ...[
+                  if (_isLoggedIn && !provider.filterByArea && provider.selectedCategories.isEmpty) ...[
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: () => Navigator.push(context,
@@ -690,13 +659,13 @@ class _HomeScreenState extends State<HomeScreen> {
           physics: const NeverScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           itemCount: list.length,
-          itemBuilder: (context, index) => _buildBantuanCard(list[index], isMalay),
+          itemBuilder: (context, index) => _buildBantuanCard(list[index], isMalay, provider),
         );
       },
     );
   }
 
-  Widget _buildBantuanCard(BantuanModel bantuan, bool isMalay) {
+  Widget _buildBantuanCard(BantuanModel bantuan, bool isMalay, BantuanProvider provider) {
     final isRequest = bantuan.type == 'request';
     final typeColor = isRequest ? Colors.orange : Colors.green;
     final typeLabel = isRequest
@@ -704,15 +673,19 @@ class _HomeScreenState extends State<HomeScreen> {
         : (isMalay ? 'Tawar Bantuan' : 'Offer Help');
     final typeIcon = isRequest ? Icons.help_outline : Icons.volunteer_activism;
 
-    final distance = (_userLat != null && _userLon != null)
-        ? GeospatialService.getPostDistance(post: bantuan, userLat: _userLat!, userLon: _userLon!)
+    // ✅ Guna provider.userLat / provider.userLon
+    final distance = (provider.userLat != null && provider.userLon != null)
+        ? GeospatialService.getPostDistance(
+            post: bantuan, userLat: provider.userLat!, userLon: provider.userLon!)
         : null;
 
     RankedPost? rankedPost;
-    if (_sortByRanking && _userLat != null && _userLon != null) {
+    if (provider.sortByRanking && provider.userLat != null && provider.userLon != null) {
       final result = GeospatialService.rankPosts(
-          posts: [bantuan], userLat: _userLat!, userLon: _userLon!,
-          preferredCategories: _selectedCategories);
+          posts: [bantuan],
+          userLat: provider.userLat!,
+          userLon: provider.userLon!,
+          preferredCategories: provider.selectedCategories);
       if (result.isNotEmpty) rankedPost = result.first;
     }
 
@@ -791,7 +764,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ],
 
-                  if (_sortByRanking && rankedPost != null) ...[
+                  if (provider.sortByRanking && rankedPost != null) ...[
                     const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

@@ -2,8 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:provider/provider.dart';
 import 'providers/language_provider.dart';
+import 'providers/bantuan_provider.dart';
+import 'providers/location_provider.dart'; // ✅ tambah
+import 'providers/auth_provider.dart';     // ✅ tambah
 import 'services/deep_link_service.dart';
 import 'services/notification_service.dart';
 import 'utils/colors.dart';
@@ -12,6 +16,10 @@ import 'screens/onboarding/splash_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+
+  // ✅ Tunggu Firebase Auth fully restore cached user sebelum app launch
+  await FirebaseAuth.instance.authStateChanges().first;
+
   runApp(const BantuNowApp());
 }
 
@@ -34,8 +42,15 @@ class _BantuNowAppState extends State<BantuNowApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => LanguageProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider(create: (_) => BantuanProvider()),
+        // ✅ Register LocationProvider
+        ChangeNotifierProvider(create: (_) => LocationProvider()),
+        // ✅ Register AuthProvider
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      ],
       child: MaterialApp(
         title: 'BantuNow',
         debugShowCheckedModeBanner: false,
