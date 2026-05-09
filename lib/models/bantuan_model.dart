@@ -9,7 +9,7 @@ class BantuanModel {
   final String category;
   final String area;
   final String areaId;
-  final String status; // 'open' | 'in_progress' | 'closed'
+  final String status;
   final String type;
   final String postedBy;
   final String postedByUid;
@@ -19,10 +19,15 @@ class BantuanModel {
   final double? latitude;
   final double? longitude;
 
-  // ✅ Helper tracking fields
+  // ✅ Pin lokasi tepat user (dari map picker)
+  final double? pinLat;
+  final double? pinLon;
+  final String? pinAddress; // Alamat reverse-geocoded (optional)
+
   final String? helperUid;
   final String? helperName;
-  final bool helperConfirmed; // true bila helper tekan "Saya Dah Bantu"
+  final bool helperConfirmed;
+  final String? posterAvailability;
 
   BantuanModel({
     required this.id,
@@ -40,9 +45,13 @@ class BantuanModel {
     required this.createdAt,
     this.latitude,
     this.longitude,
+    this.pinLat,
+    this.pinLon,
+    this.pinAddress,
     this.helperUid,
     this.helperName,
     this.helperConfirmed = false,
+    this.posterAvailability,
   });
 
   factory BantuanModel.fromMap(Map<String, dynamic> map, String id) {
@@ -64,9 +73,13 @@ class BantuanModel {
           : DateTime.now(),
       latitude: (map['latitude'] as num?)?.toDouble(),
       longitude: (map['longitude'] as num?)?.toDouble(),
+      pinLat: (map['pin_lat'] as num?)?.toDouble(),
+      pinLon: (map['pin_lon'] as num?)?.toDouble(),
+      pinAddress: map['pin_address'],
       helperUid: map['helper_uid'],
       helperName: map['helper_name'],
       helperConfirmed: map['helper_confirmed'] ?? false,
+      posterAvailability: map['poster_availability'],
     );
   }
 
@@ -85,9 +98,13 @@ class BantuanModel {
       if (imageUrl != null) 'image_url': imageUrl,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
+      if (pinLat != null) 'pin_lat': pinLat,
+      if (pinLon != null) 'pin_lon': pinLon,
+      if (pinAddress != null) 'pin_address': pinAddress,
       if (helperUid != null) 'helper_uid': helperUid,
       if (helperName != null) 'helper_name': helperName,
       'helper_confirmed': helperConfirmed,
+      if (posterAvailability != null) 'poster_availability': posterAvailability,
     };
   }
 }

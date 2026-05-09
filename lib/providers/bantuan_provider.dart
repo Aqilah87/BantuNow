@@ -1,17 +1,9 @@
 // lib/providers/bantuan_provider.dart
-//
-// Provider untuk manage state home screen:
-// - Filter (type, category, area)
-// - Sort (nearest, best match)
-// - User location (lat/lon)
-// - Stream dari BantuanService
-//
-// TIDAK mengubah logic dalam bantuan_service.dart atau geospatial_service.dart
-// Hanya memindahkan state dari HomeScreen ke sini
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/bantuan_model.dart';
+import '../models/location_model.dart';
 import '../services/bantuan_service.dart';
 import '../services/geospatial_service.dart';
 import '../services/location_service.dart';
@@ -19,72 +11,155 @@ import '../services/location_service.dart';
 class BantuanProvider extends ChangeNotifier {
   final BantuanService _bantuanService = BantuanService();
 
-  // ── User location & area ─────────────────────────────────────────────────────
+  // ── User location & area ──────────────────────────────────────────
   String _userArea = '';
   String _userAreaId = '';
   double? _userLat;
   double? _userLon;
 
+  // GPS auto-detect state
+  bool _isDetectingGps = false;
+  bool _gpsDetected = false;       // GPS berjaya detect
+  bool _gpsFromAuto = false;       // True = dari auto GPS, false = manual
+
   String get userArea => _userArea;
   String get userAreaId => _userAreaId;
   double? get userLat => _userLat;
   double? get userLon => _userLon;
+  bool get isDetectingGps => _isDetectingGps;
+  bool get gpsDetected => _gpsDetected;
+  bool get gpsFromAuto => _gpsFromAuto;
 
-  // ── Filter state ─────────────────────────────────────────────────────────────
-  String _selectedType = 'all';           // 'all' | 'request' | 'offer'
-  Set<String> _selectedCategories = {};   // kosong = semua kategori
-  bool _filterByArea = false;             // filter ikut kawasan user
+  // ── Filter state ──────────────────────────────────────────────────
+  String _selectedType = 'all';
+  Set<String> _selectedCategories = {};
+  bool _filterByArea = false;
 
   String get selectedType => _selectedType;
   Set<String> get selectedCategories => Set.unmodifiable(_selectedCategories);
   bool get filterByArea => _filterByArea;
 
-  // ── Sort state ───────────────────────────────────────────────────────────────
-  bool _sortByNearest = false;   // sort ikut jarak terdekat
-  bool _sortByRanking = false;   // sort ikut composite score (best match)
+  // ── Sort state ────────────────────────────────────────────────────
+  bool _sortByNearest = false;
+  bool _sortByRanking = false;
 
   bool get sortByNearest => _sortByNearest;
   bool get sortByRanking => _sortByRanking;
 
-  // ── Stream dari Firestore ────────────────────────────────────────────────────
-  // Sama seperti yang digunakan dalam HomeScreen sebelum ini
-  Stream<List<BantuanModel>> get bantuanStream => _bantuanService.getBantuanStream(
-    type: _selectedType == 'all' ? null : _selectedType,
-  );
+  // ── Best Match Criteria ───────────────────────────────────────────
+  double _bestMatchRadiusKm = 0;
+  String _bestMatchType = 'all';
+  bool _bestMatchRequireAvailable = false;
 
-  // ── Init — load area dan location ────────────────────────────────────────────
+  double get bestMatchRadiusKm => _bestMatchRadiusKm;
+  String get bestMatchType => _bestMatchType;
+  bool get bestMatchRequireAvailable => _bestMatchRequireAvailable;
+
+  bool get hasBestMatchCriteria =>
+      _bestMatchRadiusKm > 0 ||
+      _bestMatchType != 'all' ||
+      _bestMatchRequireAvailable ||
+      _selectedCategories.isNotEmpty;
+
+  // ── Stream ────────────────────────────────────────────────────────
+  Stream<List<BantuanModel>> get bantuanStream =>
+      _bantuanService.getBantuanStream(
+        type: _selectedType == 'all' ? null : _selectedType,
+      );
+
+  // ── Init — auto GPS detect ────────────────────────────────────────
+  // 1. Load kawasan dari SharedPreferences (instant)
+  // 2. Auto detect GPS → auto-set kawasan terdekat kalau belum ada
+  // 3. Kalau GPS gagal → fallback ke saved area coordinates
   Future<void> loadUserAreaAndLocation() async {
-    // Load area dari SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     _userArea = prefs.getString('user_area_name') ?? '';
     _userAreaId = prefs.getString('user_area_id') ?? '';
     notifyListeners();
 
-    // Load GPS location — sama seperti _loadUserArea() dalam HomeScreen
-    final location = await LocationService.getBestLocation();
-    if (location != null) {
-      _userLat = location['lat'];
-      _userLon = location['lon'];
-      notifyListeners();
+    // Start GPS detection
+    _isDetectingGps = true;
+    notifyListeners();
+
+    try {
+      final gps = await LocationService.getCurrentLocation();
+
+      if (gps != null) {
+        _userLat = gps.latitude;
+        _userLon = gps.longitude;
+        _gpsDetected = true;
+
+        // Auto-set kawasan terdekat HANYA kalau user belum pilih kawasan
+        if (_userAreaId.isEmpty) {
+          final nearest = LocationService.getNearestArea(
+            gps.latitude,
+            gps.longitude,
+          );
+          if (nearest != null) {
+            _userArea = nearest.name;
+            _userAreaId = nearest.id;
+            _gpsFromAuto = true;
+
+            // Simpan ke SharedPreferences
+            await prefs.setString('user_area_id', nearest.id);
+            await prefs.setString('user_area_name', nearest.name);
+          }
+        }
+      } else {
+        // GPS gagal → fallback ke saved area coordinates
+        _gpsDetected = false;
+        final areaCoords = await LocationService.getAreaCoordinates();
+        if (areaCoords != null) {
+          _userLat = areaCoords['lat'];
+          _userLon = areaCoords['lon'];
+        }
+      }
+    } catch (_) {
+      // Silent fail — guna fallback
+      final areaCoords = await LocationService.getAreaCoordinates();
+      if (areaCoords != null) {
+        _userLat = areaCoords['lat'];
+        _userLon = areaCoords['lon'];
+      }
     }
+
+    _isDetectingGps = false;
+    notifyListeners();
   }
 
-  // ── Apply filter & sort pada list ────────────────────────────────────────────
-  // Logic sama seperti dalam _buildBantuanList() HomeScreen — tidak diubah
+  // ── Manual override kawasan ───────────────────────────────────────
+  // Dipanggil bila user tukar kawasan secara manual
+  Future<void> setManualArea(String areaId, String areaName) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_area_id', areaId);
+    await prefs.setString('user_area_name', areaName);
+
+    _userAreaId = areaId;
+    _userArea = areaName;
+    _gpsFromAuto = false; // Dah override manual
+
+    // Update koordinat ke kawasan yang dipilih
+    final area = KualaTerengganuAreas.getAreaById(areaId);
+    if (area != null) {
+      _userLat = area.latitude;
+      _userLon = area.longitude;
+    }
+
+    notifyListeners();
+  }
+
+  // ── Apply filters & sort ──────────────────────────────────────────
   List<BantuanModel> applyFiltersAndSort(List<BantuanModel> rawList) {
     var list = List<BantuanModel>.from(rawList);
 
-    // Filter ikut kawasan
     if (_filterByArea && _userAreaId.isNotEmpty) {
       list = list.where((p) => p.areaId == _userAreaId).toList();
     }
 
-    // Filter ikut kategori
-    if (_selectedCategories.isNotEmpty) {
+    if (_selectedCategories.isNotEmpty && !_sortByRanking) {
       list = list.where((p) => _selectedCategories.contains(p.category)).toList();
     }
 
-    // Sort ikut jarak terdekat — guna GeospatialService.nearestNeighbour()
     if (_sortByNearest && _userLat != null && _userLon != null) {
       list = GeospatialService.nearestNeighbour(
         posts: list,
@@ -93,13 +168,15 @@ class BantuanProvider extends ChangeNotifier {
       );
     }
 
-    // Sort ikut best match — guna GeospatialService.rankPosts()
     if (_sortByRanking && _userLat != null && _userLon != null) {
       final ranked = GeospatialService.rankPosts(
         posts: list,
         userLat: _userLat!,
         userLon: _userLon!,
         preferredCategories: _selectedCategories,
+        radiusKm: _bestMatchRadiusKm,
+        filterType: _bestMatchType,
+        requireAvailable: _bestMatchRequireAvailable,
       );
       list = ranked.map((r) => r.post).toList();
     }
@@ -107,8 +184,7 @@ class BantuanProvider extends ChangeNotifier {
     return list;
   }
 
-  // ── Setters — setiap setter call notifyListeners() ───────────────────────────
-
+  // ── Setters ───────────────────────────────────────────────────────
   void setSelectedType(String type) {
     if (_selectedType == type) return;
     _selectedType = type;
@@ -122,13 +198,13 @@ class BantuanProvider extends ChangeNotifier {
 
   void setSortByNearest(bool value) {
     _sortByNearest = value;
-    if (value) _sortByRanking = false; // mutual exclusive
+    if (value) _sortByRanking = false;
     notifyListeners();
   }
 
   void setSortByRanking(bool value) {
     _sortByRanking = value;
-    if (value) _sortByNearest = false; // mutual exclusive
+    if (value) _sortByNearest = false;
     notifyListeners();
   }
 
@@ -153,7 +229,30 @@ class BantuanProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Reload area (dipanggil selepas tukar kawasan) ────────────────────────────
+  void applyBestMatchCriteria({
+    required Set<String> categories,
+    required double radiusKm,
+    required String type,
+    required bool requireAvailable,
+  }) {
+    _selectedCategories = Set.from(categories);
+    _bestMatchRadiusKm = radiusKm;
+    _bestMatchType = type;
+    _bestMatchRequireAvailable = requireAvailable;
+    _sortByRanking = true;
+    _sortByNearest = false;
+    notifyListeners();
+  }
+
+  void resetBestMatchCriteria() {
+    _bestMatchRadiusKm = 0;
+    _bestMatchType = 'all';
+    _bestMatchRequireAvailable = false;
+    _selectedCategories.clear();
+    _sortByRanking = false;
+    notifyListeners();
+  }
+
   Future<void> reloadArea() async {
     final prefs = await SharedPreferences.getInstance();
     _userArea = prefs.getString('user_area_name') ?? '';

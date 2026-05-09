@@ -1,11 +1,12 @@
 // lib/providers/location_provider.dart
 //
-// Provider untuk manage state berkaitan lokasi:
-// - User area (nama + id) dari SharedPreferences
-// - GPS coordinates (lat/lon) dari LocationService
-// - Loading state semasa fetch location
+// Provider untuk manage state lokasi dalam aplikasi:
+// - Simpan kawasan user (SharedPreferences)
+// - Simpan koordinat GPS (lat/lon)
+// - Control loading state semasa ambil lokasi
 //
-// TIDAK mengubah logic dalam location_service.dart atau location_model.dart
+// Provider ini TIDAK handle logic GPS secara direct,
+// tetapi menggunakan LocationService sebagai service layer.
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,86 +15,142 @@ import '../services/location_service.dart';
 
 class LocationProvider extends ChangeNotifier {
 
-  // ── Area state ───────────────────────────────────────────────────────────────
-  String _userArea = '';
-  String _userAreaId = '';
+  // ────────────────────────────────────────────────────────────────
+  // AREA STATE (Kawasan user)
+  // ────────────────────────────────────────────────────────────────
+  String _userArea = '';      // Nama kawasan (contoh: "Gong Badak")
+  String _userAreaId = '';    // ID kawasan (contoh: "KT01")
 
   String get userArea => _userArea;
   String get userAreaId => _userAreaId;
+
+  // Check sama ada user dah pilih kawasan
   bool get hasArea => _userAreaId.isNotEmpty;
 
-  // ── GPS coordinates ──────────────────────────────────────────────────────────
-  double? _userLat;
-  double? _userLon;
-  bool _isLoadingLocation = false;
+  // ────────────────────────────────────────────────────────────────
+  // GPS STATE (Koordinat user)
+  // ────────────────────────────────────────────────────────────────
+  double? _userLat;   // Latitude
+  double? _userLon;   // Longitude
+
+  bool _isLoadingLocation = false; // Indicator loading
 
   double? get userLat => _userLat;
   double? get userLon => _userLon;
+
   bool get isLoadingLocation => _isLoadingLocation;
+
+  // Check sama ada location tersedia
   bool get hasLocation => _userLat != null && _userLon != null;
 
-  // ── Init — load area dari SharedPreferences dan fetch GPS ────────────────────
+  // ────────────────────────────────────────────────────────────────
+  // INIT FUNCTION
+  //
+  // Function utama untuk:
+  //   1. Load kawasan dari local storage
+  //   2. Fetch lokasi GPS
+  // ────────────────────────────────────────────────────────────────
   Future<void> loadLocation() async {
-    // Load area dari SharedPreferences — sama seperti dalam select_location_screen
+
+    // STEP 1: Load kawasan dari SharedPreferences
     final prefs = await SharedPreferences.getInstance();
+
     _userArea = prefs.getString('user_area_name') ?? '';
     _userAreaId = prefs.getString('user_area_id') ?? '';
+
+    // Notify UI untuk update data kawasan
     notifyListeners();
 
-    // Fetch GPS location — sama seperti LocationService.getBestLocation()
+    // STEP 2: Fetch lokasi GPS / fallback location
     _isLoadingLocation = true;
     notifyListeners();
 
     final location = await LocationService.getBestLocation();
+
     if (location != null) {
       _userLat = location['lat'];
       _userLon = location['lon'];
     }
 
+    // Stop loading
     _isLoadingLocation = false;
     notifyListeners();
   }
 
-  // ── Save area — dipanggil selepas user pilih kawasan ────────────────────────
-  // Logic sama seperti _saveLocationAndContinue() dalam select_location_screen
+  // ────────────────────────────────────────────────────────────────
+  // SAVE AREA
+  //
+  // Dipanggil bila user pilih kawasan baru
+  // ────────────────────────────────────────────────────────────────
   Future<void> saveArea(String areaId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('user_area_id', areaId);
-    await prefs.setString('user_area_name', KualaTerengganuAreas.getAreaName(areaId));
 
+    final prefs = await SharedPreferences.getInstance();
+
+    // Simpan ke local storage
+    await prefs.setString('user_area_id', areaId);
+    await prefs.setString(
+      'user_area_name',
+      KualaTerengganuAreas.getAreaName(areaId),
+    );
+
+    // Update state dalam app
     _userAreaId = areaId;
     _userArea = KualaTerengganuAreas.getAreaName(areaId);
+
     notifyListeners();
 
-    // Reload GPS selepas area berubah
+    // Reload GPS sebab kawasan berubah
     await _reloadGps();
   }
 
-  // ── Clear area — dipanggil bila user tukar kawasan ───────────────────────────
+  // ────────────────────────────────────────────────────────────────
+  // CLEAR AREA
+  //
+  // Digunakan bila user tukar kawasan
+  // ────────────────────────────────────────────────────────────────
   Future<void> clearArea() async {
+
     final prefs = await SharedPreferences.getInstance();
+
+    // Remove data dari local storage
     await prefs.remove('user_area_id');
     await prefs.remove('user_area_name');
 
+    // Reset state
     _userArea = '';
     _userAreaId = '';
+
     notifyListeners();
   }
 
-  // ── Reload area dari SharedPreferences ──────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────
+  // RELOAD AREA SAHAJA
+  //
+  // Refresh data kawasan tanpa ganggu GPS
+  // ────────────────────────────────────────────────────────────────
   Future<void> reloadArea() async {
+
     final prefs = await SharedPreferences.getInstance();
+
     _userArea = prefs.getString('user_area_name') ?? '';
     _userAreaId = prefs.getString('user_area_id') ?? '';
+
     notifyListeners();
   }
 
-  // ── Reload GPS sahaja ────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────
+  // RELOAD GPS (PRIVATE FUNCTION)
+  //
+  // Ambil semula lokasi user menggunakan LocationService
+  // ────────────────────────────────────────────────────────────────
   Future<void> _reloadGps() async {
+
     final location = await LocationService.getBestLocation();
+
     if (location != null) {
       _userLat = location['lat'];
       _userLon = location['lon'];
+
       notifyListeners();
     }
   }
