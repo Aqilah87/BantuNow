@@ -9,13 +9,14 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart' hide Path; // ← FIX: hide Path dari latlong2
 import '../../utils/colors.dart';
 import '../../providers/language_provider.dart';
 import '../../models/bantuan_model.dart';
 import '../../services/bantuan_service.dart';
 import '../../services/deep_link_service.dart';
 import '../../widgets/rating_dialog.dart';
+import '../profile/user_profile_screen.dart';
 
 class BantuanDetailScreen extends StatefulWidget {
   final BantuanModel bantuan;
@@ -153,6 +154,155 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           content: Text(isMalay
               ? 'Tidak dapat membuka WhatsApp'
               : 'Cannot open WhatsApp'),
+        ));
+      }
+    }
+  }
+
+  // ─── Navigation (Google Maps & Waze) ─────────────────────────────────────────
+
+  /// Buka bottom sheet untuk pilih Google Maps atau Waze
+  void _showNavigationSheet(BuildContext context, double lat, double lon,
+      String title, bool isMalay) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle bar
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+
+            Text(
+              isMalay ? 'Navigate ke Lokasi' : 'Navigate to Location',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textDark),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isMalay
+                  ? 'Pilih aplikasi navigasi'
+                  : 'Choose navigation app',
+              style: TextStyle(fontSize: 13, color: AppColors.textGrey),
+            ),
+            const SizedBox(height: 24),
+
+            // Butang Google Maps & Waze
+            Row(
+              children: [
+                // Google Maps
+                Expanded(
+                  child: _buildNavOption(
+                    svgAsset: null,
+                    icon: Icons.map,
+                    iconColor: const Color(0xFF4285F4),
+                    bgColor: const Color(0xFF4285F4).withOpacity(0.1),
+                    label: 'Google Maps',
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await _openGoogleMaps(lat, lon, title, isMalay);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Waze
+                Expanded(
+                  child: _buildNavOption(
+                    svgAsset: null,
+                    icon: Icons.navigation,
+                    iconColor: const Color(0xFF05C8F7),
+                    bgColor: const Color(0xFF05C8F7).withOpacity(0.1),
+                    label: 'Waze',
+                    onTap: () async {
+                      Navigator.pop(ctx);
+                      await _openWaze(lat, lon, isMalay);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavOption({
+    String? svgAsset,
+    required IconData icon,
+    required Color iconColor,
+    required Color bgColor,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: iconColor.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 36, color: iconColor),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: iconColor),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Buka Google Maps dengan koordinat
+  Future<void> _openGoogleMaps(
+      double lat, double lon, String label, bool isMalay) async {
+    // goo.gl/maps URL — buka app Google Maps kalau ada, browser kalau tak ada
+    final uri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=$lat,$lon');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(isMalay
+              ? 'Tidak dapat membuka Google Maps'
+              : 'Cannot open Google Maps'),
+        ));
+      }
+    }
+  }
+
+  /// Buka Waze dengan koordinat
+  Future<void> _openWaze(double lat, double lon, bool isMalay) async {
+    final uri = Uri.parse('https://waze.com/ul?ll=$lat,$lon&navigate=yes');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              isMalay ? 'Tidak dapat membuka Waze' : 'Cannot open Waze'),
         ));
       }
     }
@@ -377,7 +527,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           .doc(_bantuan.id)
           .get();
       if (mounted && updated.exists) {
-        setState(() => _bantuan = BantuanModel.fromMap(updated.data()!, updated.id));
+        setState(
+            () => _bantuan = BantuanModel.fromMap(updated.data()!, updated.id));
       }
 
       if (mounted) {
@@ -433,7 +584,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           .doc(_bantuan.id)
           .get();
       if (mounted && updated.exists) {
-        setState(() => _bantuan = BantuanModel.fromMap(updated.data()!, updated.id));
+        setState(
+            () => _bantuan = BantuanModel.fromMap(updated.data()!, updated.id));
       }
     } catch (e) {
       if (mounted) {
@@ -625,7 +777,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           .doc(_bantuan.id)
           .get();
       if (mounted && updated.exists) {
-        setState(() => _bantuan = BantuanModel.fromMap(updated.data()!, updated.id));
+        setState(
+            () => _bantuan = BantuanModel.fromMap(updated.data()!, updated.id));
       }
 
       if (mounted) {
@@ -705,7 +858,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.4),
                       shape: BoxShape.circle),
-                  child: const Icon(Icons.share, color: Colors.white, size: 20),
+                  child:
+                      const Icon(Icons.share, color: Colors.white, size: 20),
                 ),
                 onPressed: () => _showShareSheet(isMalay),
               ),
@@ -776,8 +930,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                           borderRadius: BorderRadius.circular(20)),
                       child: Text(
                         '${BantuanCategories.getCategoryIcon(bantuan.category)} ${BantuanCategories.getCategoryName(bantuan.category).split(' / ')[0]}',
-                        style:
-                            TextStyle(fontSize: 12, color: AppColors.primaryBlue),
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.primaryBlue),
                       ),
                     ),
                     const Spacer(),
@@ -818,8 +972,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                     const SizedBox(width: 4),
                     Text(
                         '${isMalay ? 'Dipost' : 'Posted'}: ${_timeAgo(bantuan.createdAt, isMalay)}',
-                        style:
-                            TextStyle(fontSize: 13, color: AppColors.textGrey)),
+                        style: TextStyle(
+                            fontSize: 13, color: AppColors.textGrey)),
                     const SizedBox(width: 16),
                     Icon(Icons.location_on_outlined,
                         size: 14, color: AppColors.primaryBlue),
@@ -928,7 +1082,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                             child: SizedBox(
                               height: 200,
                               child: Stack(children: [
-                                // Non-interactive map
                                 AbsorbPointer(
                                   child: FlutterMap(
                                     options: MapOptions(
@@ -949,8 +1102,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                       ),
                                       MarkerLayer(markers: [
                                         Marker(
-                                          point: LatLng(
-                                              bantuan.pinLat!,
+                                          point: LatLng(bantuan.pinLat!,
                                               bantuan.pinLon!),
                                           width: 50,
                                           height: 50,
@@ -962,45 +1114,96 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                   ),
                                 ),
 
-                                // "Buka Peta" button overlay
+                                // ── Overlay buttons (Navigate + Buka Peta) ──
                                 Positioned(
                                   bottom: 10,
+                                  left: 10,
                                   right: 10,
-                                  child: GestureDetector(
-                                    onTap: () => _openFullMap(isMalay),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 7),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius:
-                                            BorderRadius.circular(20),
-                                        boxShadow: [
-                                          BoxShadow(
-                                              color: Colors.black
-                                                  .withOpacity(0.12),
-                                              blurRadius: 6)
-                                        ],
+                                  child: Row(
+                                    children: [
+                                      // Navigate button
+                                      GestureDetector(
+                                        onTap: () => _showNavigationSheet(
+                                            context,
+                                            bantuan.pinLat!,
+                                            bantuan.pinLon!,
+                                            bantuan.title,
+                                            isMalay),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 7),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primaryBlue,
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.18),
+                                                  blurRadius: 6)
+                                            ],
+                                          ),
+                                          child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.navigation,
+                                                    size: 13,
+                                                    color: Colors.white),
+                                                const SizedBox(width: 5),
+                                                Text(
+                                                  isMalay
+                                                      ? 'Navigate'
+                                                      : 'Navigate',
+                                                  style: const TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w600),
+                                                ),
+                                              ]),
+                                        ),
                                       ),
-                                      child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.open_in_full,
-                                                size: 13,
-                                                color: AppColors.primaryBlue),
-                                            const SizedBox(width: 5),
-                                            Text(
-                                              isMalay
-                                                  ? 'Buka Peta'
-                                                  : 'Open Map',
-                                              style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: AppColors.primaryBlue,
-                                                  fontWeight:
-                                                      FontWeight.w600),
-                                            ),
-                                          ]),
-                                    ),
+                                      const Spacer(),
+                                      // Buka Peta button
+                                      GestureDetector(
+                                        onTap: () => _openFullMap(isMalay),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 7),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.12),
+                                                  blurRadius: 6)
+                                            ],
+                                          ),
+                                          child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.open_in_full,
+                                                    size: 13,
+                                                    color:
+                                                        AppColors.primaryBlue),
+                                                const SizedBox(width: 5),
+                                                Text(
+                                                  isMalay
+                                                      ? 'Buka Peta'
+                                                      : 'Open Map',
+                                                  style: TextStyle(
+                                                      fontSize: 12,
+                                                      color:
+                                                          AppColors.primaryBlue,
+                                                      fontWeight:
+                                                          FontWeight.w600),
+                                                ),
+                                              ]),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ]),
@@ -1021,8 +1224,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(Icons.gps_fixed,
-                                    size: 11,
-                                    color: AppColors.primaryBlue),
+                                    size: 11, color: AppColors.primaryBlue),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${bantuan.pinLat!.toStringAsFixed(6)}, '
@@ -1058,6 +1260,41 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                               ],
                             ),
                           ],
+
+                          // ── Navigate button bawah card ──────────────────
+                          const SizedBox(height: 12),
+                          const Divider(height: 1),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _showNavigationSheet(
+                                  context,
+                                  bantuan.pinLat!,
+                                  bantuan.pinLon!,
+                                  bantuan.title,
+                                  isMalay),
+                              icon: const Icon(Icons.navigation,
+                                  color: Colors.white, size: 18),
+                              label: Text(
+                                isMalay
+                                    ? 'Navigate ke Sini'
+                                    : 'Navigate Here',
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primaryBlue,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                                elevation: 0,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1074,35 +1311,109 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                             isMalay ? 'Maklumat Pengguna' : 'User Info',
                             Icons.person_outline),
                         const SizedBox(height: 14),
-                        Row(children: [
-                          CircleAvatar(
-                            radius: 24,
-                            backgroundColor: AppColors.backgroundBlue,
-                            child: Text(
-                              bantuan.postedBy.isNotEmpty
-                                  ? bantuan.postedBy[0].toUpperCase()
-                                  : 'U',
-                              style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primaryBlue),
+                        // ── Tappable profile row ──────────────────────
+                        GestureDetector(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => UserProfileScreen(
+                                userUid: bantuan.postedByUid,
+                                userName: bantuan.postedBy,
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(bantuan.postedBy,
-                                    style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textDark)),
-                                Text(bantuan.area,
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.textGrey)),
-                              ]),
-                        ]),
+                          child: Row(children: [
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundColor: AppColors.backgroundBlue,
+                              child: Text(
+                                bantuan.postedBy.isNotEmpty
+                                    ? bantuan.postedBy[0].toUpperCase()
+                                    : 'U',
+                                style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primaryBlue),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(bantuan.postedBy,
+                                        style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textDark)),
+                                    const SizedBox(height: 3),
+                                    // ── Average rating inline ─────────
+                                    FutureBuilder<DocumentSnapshot>(
+                                      future: FirebaseFirestore.instance
+                                          .collection('users')
+                                          .doc(bantuan.postedByUid)
+                                          .get(),
+                                      builder: (ctx, snap) {
+                                        if (!snap.hasData || !snap.data!.exists) {
+                                          return Text(bantuan.area,
+                                              style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: AppColors.textGrey));
+                                        }
+                                        final data = snap.data!.data()
+                                            as Map<String, dynamic>;
+                                        final avg = (data['rating'] as num?)
+                                                ?.toDouble() ??
+                                            0.0;
+                                        final count =
+                                            (data['rating_count'] as num?)
+                                                    ?.toInt() ??
+                                                0;
+                                        return Row(children: [
+                                          if (count > 0) ...[
+                                            Icon(Icons.star_rounded,
+                                                size: 14,
+                                                color: Colors.amber),
+                                            const SizedBox(width: 3),
+                                            Text(
+                                              avg.toStringAsFixed(1),
+                                              style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppColors.textDark),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '($count)',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: AppColors.textGrey),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              width: 4,
+                                              height: 4,
+                                              decoration: BoxDecoration(
+                                                color: AppColors.textGrey,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                          ],
+                                          Text(bantuan.area,
+                                              style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: AppColors.textGrey)),
+                                        ]);
+                                      },
+                                    ),
+                                  ]),
+                            ),
+                            // Arrow hint
+                            Icon(Icons.chevron_right,
+                                color: AppColors.textGrey, size: 20),
+                          ]),
+                        ),
                         const SizedBox(height: 14),
                         const Divider(height: 1),
                         const SizedBox(height: 14),
@@ -1355,8 +1666,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                 decoration: BoxDecoration(
                   color: Colors.orange.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: Colors.orange.withOpacity(0.3)),
+                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
                 ),
                 child: Row(children: [
                   const Icon(Icons.hourglass_top,
@@ -1367,8 +1677,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                       isMalay
                           ? 'Menunggu helper mengesahkan selesai...'
                           : 'Waiting for helper to confirm done...',
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.orange.shade700),
+                      style:
+                          TextStyle(fontSize: 13, color: Colors.orange.shade700),
                     ),
                   ),
                 ]),
@@ -1377,14 +1687,13 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: _isActionLoading
-                      ? null
-                      : () => _resetToOpen(isMalay),
+                  onPressed:
+                      _isActionLoading ? null : () => _resetToOpen(isMalay),
                   icon: const Icon(Icons.refresh,
                       color: Colors.orange, size: 18),
                   label: Text(isMalay ? 'Tukar Helper' : 'Change Helper',
-                      style: const TextStyle(
-                          color: Colors.orange, fontSize: 13)),
+                      style:
+                          const TextStyle(color: Colors.orange, fontSize: 13)),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.orange),
                     shape: RoundedRectangleBorder(
@@ -1468,8 +1777,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                     isMalay
                         ? 'Anda telah sahkan selesai. Menunggu owner menutup post...'
                         : 'You confirmed done. Waiting for owner to close...',
-                    style:
-                        const TextStyle(fontSize: 13, color: Colors.green),
+                    style: const TextStyle(fontSize: 13, color: Colors.green),
                   ),
                 ),
               ]),
@@ -1564,6 +1872,139 @@ class _FullMapViewScreen extends StatelessWidget {
     required this.isMalay,
   });
 
+  Future<void> _openGoogleMaps(BuildContext context) async {
+    final uri =
+        Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lon');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(isMalay
+              ? 'Tidak dapat membuka Google Maps'
+              : 'Cannot open Google Maps'),
+        ));
+      }
+    }
+  }
+
+  Future<void> _openWaze(BuildContext context) async {
+    final uri = Uri.parse('https://waze.com/ul?ll=$lat,$lon&navigate=yes');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              isMalay ? 'Tidak dapat membuka Waze' : 'Cannot open Waze'),
+        ));
+      }
+    }
+  }
+
+  void _showNavigationSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+            Text(
+              isMalay ? 'Navigate ke Lokasi' : 'Navigate to Location',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textDark),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isMalay ? 'Pilih aplikasi navigasi' : 'Choose navigation app',
+              style: TextStyle(fontSize: 13, color: AppColors.textGrey),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                // Google Maps
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _openGoogleMaps(context);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4285F4).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                            color: const Color(0xFF4285F4).withOpacity(0.3)),
+                      ),
+                      child: Column(children: [
+                        const Icon(Icons.map,
+                            size: 36, color: Color(0xFF4285F4)),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Google Maps',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF4285F4)),
+                        ),
+                      ]),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Waze
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _openWaze(context);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF05C8F7).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                            color: const Color(0xFF05C8F7).withOpacity(0.3)),
+                      ),
+                      child: Column(children: [
+                        const Icon(Icons.navigation,
+                            size: 36, color: Color(0xFF05C8F7)),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Waze',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF05C8F7)),
+                        ),
+                      ]),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pinLocation = LatLng(lat, lon);
@@ -1581,6 +2022,18 @@ class _FullMapViewScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
+        // Navigate button dalam AppBar
+        actions: [
+          TextButton.icon(
+            onPressed: () => _showNavigationSheet(context),
+            icon: const Icon(Icons.navigation, color: Colors.white, size: 18),
+            label: Text(
+              isMalay ? 'Navigate' : 'Navigate',
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -1611,12 +2064,10 @@ class _FullMapViewScreen extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: AppColors.primaryBlue,
                           shape: BoxShape.circle,
-                          border:
-                              Border.all(color: Colors.white, width: 3),
+                          border: Border.all(color: Colors.white, width: 3),
                           boxShadow: [
                             BoxShadow(
-                                color:
-                                    AppColors.primaryBlue.withOpacity(0.4),
+                                color: AppColors.primaryBlue.withOpacity(0.4),
                                 blurRadius: 10)
                           ],
                         ),
@@ -1635,7 +2086,7 @@ class _FullMapViewScreen extends StatelessWidget {
             ],
           ),
 
-          // Info panel bawah
+          // Info + Navigate panel bawah
           Positioned(
             bottom: 0,
             left: 0,
@@ -1676,8 +2127,8 @@ class _FullMapViewScreen extends StatelessWidget {
                       overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppColors.backgroundBlue,
                       borderRadius: BorderRadius.circular(6),
@@ -1716,6 +2167,65 @@ class _FullMapViewScreen extends StatelessWidget {
                       ],
                     ),
                   ],
+
+                  const SizedBox(height: 14),
+
+                  // ── Navigate buttons row ────────────────────────────
+                  Row(children: [
+                    // Google Maps
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _openGoogleMaps(context),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4285F4).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color:
+                                    const Color(0xFF4285F4).withOpacity(0.3)),
+                          ),
+                          child: Column(children: [
+                            const Icon(Icons.map,
+                                size: 26, color: Color(0xFF4285F4)),
+                            const SizedBox(height: 6),
+                            const Text('Google Maps',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF4285F4))),
+                          ]),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Waze
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _openWaze(context),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF05C8F7).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color:
+                                    const Color(0xFF05C8F7).withOpacity(0.3)),
+                          ),
+                          child: Column(children: [
+                            const Icon(Icons.navigation,
+                                size: 26, color: Color(0xFF05C8F7)),
+                            const SizedBox(height: 6),
+                            const Text('Waze',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF05C8F7))),
+                          ]),
+                        ),
+                      ),
+                    ),
+                  ]),
                 ],
               ),
             ),
@@ -1727,6 +2237,8 @@ class _FullMapViewScreen extends StatelessWidget {
 }
 
 // ─── Pin tail painter ─────────────────────────────────────────────────────────
+// FIX: import 'package:latlong2/latlong.dart' hide Path — elak conflict
+// Guna ui.Path() yang explicit dari dart:ui
 
 class _PinTailPainter extends CustomPainter {
   final Color color;
@@ -1735,14 +2247,15 @@ class _PinTailPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
-    final path = ui.Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width / 2, size.height)
-      ..lineTo(size.width, 0)
-      ..close();
+    final path = ui.Path();
+    path.moveTo(0, 0);
+    path.lineTo(size.width / 2, size.height);
+    path.lineTo(size.width, 0);
+    path.close();
     canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(_) => false;
+  bool shouldRepaint(_PinTailPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
