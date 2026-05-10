@@ -1,9 +1,8 @@
 // lib/screens/onboarding/onboarding_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/colors.dart';
-import '../main_screen.dart';
+import '../location/select_location_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({Key? key}) : super(key: key);
@@ -12,209 +11,390 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends State<OnboardingScreen>
+    with SingleTickerProviderStateMixin {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  late AnimationController _animController;
+  late Animation<double> _fadeAnim;
 
-  // ✅ Tambah slide privasi
-  final List<OnboardingData> _pages = [
-    OnboardingData(
-      icon: Icons.people_outline_rounded,
-      title: 'Connect with Your Community',
-      titleBM: 'Berhubung dengan Komuniti Anda',
-      description: 'Find people nearby who need help or can offer assistance in Kuala Terengganu.',
-      descriptionBM: 'Cari orang berhampiran yang memerlukan bantuan atau boleh menawarkan pertolongan di Kuala Terengganu.',
+  // ── 3 slides sahaja ───────────────────────────────────────────────
+  final List<_OnboardingData> _pages = [
+    _OnboardingData(
+      emoji: '🤝',
+      gradient: [Color(0xFF1565C0), Color(0xFF1E88E5)],
+      accentColor: Color(0xFF64B5F6),
+      titleEN: 'Welcome to BantuNow',
+      titleBM: 'Selamat Datang ke BantuNow',
+      descEN:
+          'A community platform connecting people in Kuala Terengganu who need help with those who can offer it.',
+      descBM:
+          'Platform komuniti yang menghubungkan penduduk Kuala Terengganu yang memerlukan bantuan dengan mereka yang boleh membantu.',
+      features: [
+        _Feature(icon: Icons.people_alt_rounded, text: 'Post & cari bantuan komuniti'),
+        _Feature(icon: Icons.location_on_rounded, text: 'Matching berdasarkan kawasan'),
+        _Feature(icon: Icons.star_rounded, text: 'Rating sistem untuk kepercayaan'),
+      ],
     ),
-    OnboardingData(
-      icon: Icons.location_on_outlined,
-      title: 'Location-Based Matching',
-      titleBM: 'Padanan Berdasarkan Lokasi',
-      description: 'Our smart algorithm matches you with the nearest helpers based on your location.',
-      descriptionBM: 'Algoritma kami memadankan anda dengan pembantu terdekat berdasarkan lokasi anda.',
+    _OnboardingData(
+      emoji: '🙋',
+      gradient: [Color(0xFFE65100), Color(0xFFF57C00)],
+      accentColor: Color(0xFFFFB74D),
+      titleEN: 'Request or Offer Help',
+      titleBM: 'Minta atau Tawarkan Bantuan',
+      descEN:
+          'Whether you need a ride, food, medical help, or just someone to talk to — post it here and your community will respond.',
+      descBM:
+          'Sama ada anda perlukan tumpangan, makanan, bantuan perubatan, atau sekadar seseorang untuk berbual — post di sini dan komuniti akan membantu.',
+      features: [
+        _Feature(icon: Icons.emoji_transportation, text: 'Transport & tumpangan'),
+        _Feature(icon: Icons.restaurant, text: 'Makanan & keperluan harian'),
+        _Feature(icon: Icons.medical_services, text: 'Perubatan & kecemasan'),
+      ],
     ),
-    OnboardingData(
-      icon: Icons.handshake_outlined,
-      title: 'Help & Be Helped',
-      titleBM: 'Bantu & Diberi Bantuan',
-      description: 'Request help when you need it, or offer assistance to those around you.',
-      descriptionBM: 'Mohon bantuan bila diperlukan, atau tawarkan bantuan kepada mereka di sekeliling anda.',
-    ),
-    // ✅ Slide baru — privasi
-    OnboardingData(
-      icon: Icons.shield_outlined,
-      title: 'Your Privacy is Protected',
-      titleBM: 'Privasi Anda Terjaga',
-      description: 'Your GPS location is used only to find nearby help. It is never stored on our servers or shared with anyone.',
-      descriptionBM: 'Lokasi GPS anda hanya digunakan untuk mencari bantuan berdekatan. Ia tidak disimpan di pelayan kami atau dikongsi dengan sesiapa.',
+    _OnboardingData(
+      emoji: '🛡️',
+      gradient: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+      accentColor: Color(0xFF81C784),
+      titleEN: 'Safe & Private',
+      titleBM: 'Selamat & Peribadi',
+      descEN:
+          'Your privacy matters. Location is used only for matching — never stored or shared. Phone numbers are visible to logged-in users only.',
+      descBM:
+          'Privasi anda penting. Lokasi hanya digunakan untuk padanan — tidak disimpan atau dikongsi. Nombor telefon hanya kelihatan kepada pengguna yang log masuk.',
+      features: [
+        _Feature(icon: Icons.gps_off, text: 'GPS tidak disimpan di pelayan'),
+        _Feature(icon: Icons.lock, text: 'Nombor telefon dilindungi'),
+        _Feature(icon: Icons.verified_user, text: 'Sistem rating untuk kepercayaan'),
+      ],
     ),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _fadeAnim = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeIn,
+    );
+    _animController.forward();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _animController.dispose();
+    super.dispose();
+  }
+
+  void _onPageChanged(int index) {
+    setState(() => _currentPage = index);
+    _animController.reset();
+    _animController.forward();
+  }
+
   Future<void> _completeOnboarding() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('hasSeenOnboarding', true);
     if (!mounted) return;
+    // → Pergi ke SelectLocationScreen
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const MainScreen()),
+      MaterialPageRoute(builder: (_) => const SelectLocationScreen()),
     );
+  }
+
+  void _nextPage() {
+    if (_currentPage == _pages.length - 1) {
+      _completeOnboarding();
+    } else {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final page = _pages[_currentPage];
+
     return Scaffold(
-      backgroundColor: AppColors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.topRight,
-              child: TextButton(
-                onPressed: _completeOnboarding,
-                child: Text('Skip', style: TextStyle(color: AppColors.textGrey, fontSize: 16)),
-              ),
-            ),
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: (index) => setState(() => _currentPage = index),
-                itemCount: _pages.length,
-                itemBuilder: (context, index) => _buildPage(_pages[index]),
-              ),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(_pages.length, (index) => _buildDot(index)),
-            ),
-            const SizedBox(height: 32),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: SizedBox(
-                width: double.infinity, height: 56,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (_currentPage == _pages.length - 1) {
-                      _completeOnboarding();
-                    } else {
-                      _pageController.nextPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryBlue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    _currentPage == _pages.length - 1 ? 'Get Started / Mula' : 'Next / Seterusnya',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.white),
-                  ),
+      body: AnimatedContainer(
+        duration: const Duration(milliseconds: 400),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: page.gradient,
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // ── Top bar — Skip ───────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Page indicator pill
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${_currentPage + 1} / ${_pages.length}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+
+                    // Skip button
+                    if (_currentPage < _pages.length - 1)
+                      TextButton(
+                        onPressed: _completeOnboarding,
+                        style: TextButton.styleFrom(
+                          backgroundColor:
+                              Colors.white.withOpacity(0.15),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                        ),
+                        child: const Text(
+                          'Skip',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      )
+                    else
+                      const SizedBox(width: 60),
+                  ],
                 ),
               ),
+
+              // ── PageView ─────────────────────────────────────────
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  onPageChanged: _onPageChanged,
+                  itemCount: _pages.length,
+                  itemBuilder: (_, index) =>
+                      _buildPage(_pages[index]),
+                ),
+              ),
+
+              // ── Bottom — dots + button ────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                child: Column(
+                  children: [
+                    // Dots
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _pages.length,
+                        (i) => _buildDot(i, page.accentColor),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Next / Get Started button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _nextPage,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: page.gradient[0],
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(16)),
+                          elevation: 0,
+                        ),
+                        child: Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _currentPage == _pages.length - 1
+                                  ? 'Mulakan / Get Started'
+                                  : 'Seterusnya / Next',
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: page.gradient[0]),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              _currentPage == _pages.length - 1
+                                  ? Icons.location_on_rounded
+                                  : Icons.arrow_forward_rounded,
+                              color: page.gradient[0],
+                              size: 20,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPage(_OnboardingData data) {
+    return FadeTransition(
+      opacity: _fadeAnim,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Emoji besar dalam circle
+            Container(
+              width: 130,
+              height: 130,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: Colors.white.withOpacity(0.3), width: 2),
+              ),
+              child: Center(
+                child: Text(data.emoji,
+                    style: const TextStyle(fontSize: 64)),
+              ),
             ),
+
             const SizedBox(height: 32),
+
+            // Title EN
+            Text(
+              data.titleEN,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  height: 1.2),
+            ),
+            const SizedBox(height: 6),
+
+            // Title BM
+            Text(
+              data.titleBM,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white.withOpacity(0.75)),
+            ),
+
+            const SizedBox(height: 20),
+
+            // Description
+            Text(
+              data.descBM,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white.withOpacity(0.85),
+                  height: 1.6),
+            ),
+
+            const SizedBox(height: 28),
+
+            // Feature chips
+            ...data.features.map((f) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: Colors.white.withOpacity(0.2)),
+                    ),
+                    child: Row(children: [
+                      Icon(f.icon,
+                          color: Colors.white, size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        f.text,
+                        style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ]),
+                  ),
+                )),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPage(OnboardingData data) {
-    // ✅ Highlight warna berbeza untuk slide privasi
-    final isPrivacySlide = data.icon == Icons.shield_outlined;
-
-    return Padding(
-      padding: const EdgeInsets.all(40),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 150, height: 150,
-            decoration: BoxDecoration(
-              color: isPrivacySlide ? Colors.green.withOpacity(0.1) : AppColors.backgroundBlue,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(data.icon, size: 80,
-                color: isPrivacySlide ? Colors.green : AppColors.primaryBlue),
-          ),
-          const SizedBox(height: 48),
-          Text(data.title,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textDark)),
-          const SizedBox(height: 4),
-          Text(data.titleBM,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
-                  color: isPrivacySlide ? Colors.green : AppColors.primaryBlue)),
-          const SizedBox(height: 16),
-          Text(data.description,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: AppColors.textGrey, height: 1.5)),
-          const SizedBox(height: 8),
-          Text(data.descriptionBM,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: AppColors.textGrey.withOpacity(0.7), height: 1.5, fontStyle: FontStyle.italic)),
-          // ✅ Extra note untuk slide privasi
-          if (isPrivacySlide) ...[
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle_outline, color: Colors.green, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Nombor telefon hanya visible kepada pengguna yang log masuk.',
-                      style: TextStyle(fontSize: 12, color: Colors.green.shade700, height: 1.4),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDot(int index) {
-    return Container(
+  Widget _buildDot(int index, Color accentColor) {
+    final isActive = _currentPage == index;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      width: _currentPage == index ? 24 : 8,
+      width: isActive ? 28 : 8,
       height: 8,
       decoration: BoxDecoration(
-        color: _currentPage == index ? AppColors.primaryBlue : AppColors.lightGrey,
+        color: isActive ? Colors.white : Colors.white.withOpacity(0.4),
         borderRadius: BorderRadius.circular(4),
       ),
     );
   }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
 }
 
-class OnboardingData {
-  final IconData icon;
-  final String title;
-  final String titleBM;
-  final String description;
-  final String descriptionBM;
+// ── Data classes ────────────────────────────────────────────────────
 
-  OnboardingData({
-    required this.icon,
-    required this.title,
+class _OnboardingData {
+  final String emoji;
+  final List<Color> gradient;
+  final Color accentColor;
+  final String titleEN;
+  final String titleBM;
+  final String descEN;
+  final String descBM;
+  final List<_Feature> features;
+
+  const _OnboardingData({
+    required this.emoji,
+    required this.gradient,
+    required this.accentColor,
+    required this.titleEN,
     required this.titleBM,
-    required this.description,
-    required this.descriptionBM,
+    required this.descEN,
+    required this.descBM,
+    required this.features,
   });
+}
+
+class _Feature {
+  final IconData icon;
+  final String text;
+  const _Feature({required this.icon, required this.text});
 }

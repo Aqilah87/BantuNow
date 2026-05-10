@@ -3,10 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/colors.dart';
 import 'onboarding_screen.dart';
-import '../main_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -24,32 +22,15 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _init() async {
     await Future.delayed(const Duration(seconds: 2));
-
-    final prefs = await SharedPreferences.getInstance();
-    final hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;
-
     if (!mounted) return;
 
-    if (!hasSeenOnboarding) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-      );
-      return;
-    }
-
-    // ✅ Cuba silent sign in untuk refresh Google session
-    // Ini penting sebab Google Sign In session expire bila app restart
+    // Cuba silent sign in untuk refresh Google session
     final firebaseUser = FirebaseAuth.instance.currentUser;
-
     if (firebaseUser != null) {
-      // User ada dalam Firebase — cuba refresh Google session secara silent
       try {
         final googleSignIn = GoogleSignIn();
         final googleUser = await googleSignIn.signInSilently();
-
         if (googleUser != null) {
-          // ✅ Berjaya refresh — update Firebase credential
           final googleAuth = await googleUser.authentication;
           final credential = GoogleAuthProvider.credential(
             accessToken: googleAuth.accessToken,
@@ -57,17 +38,15 @@ class _SplashScreenState extends State<SplashScreen> {
           );
           await FirebaseAuth.instance.signInWithCredential(credential);
         }
-        // Kalau googleUser null, Firebase token masih valid — teruskan je
-      } catch (_) {
-        // Silent fail — kalau gagal, biarkan Firebase handle sendiri
-      }
+      } catch (_) {}
     }
 
     if (!mounted) return;
 
+    // Sentiasa pergi OnboardingScreen — setiap kali buka app
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const MainScreen()),
+      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
     );
   }
 
@@ -98,7 +77,8 @@ class _SplashScreenState extends State<SplashScreen> {
             const SizedBox(height: 8),
             Text('Community Assistance Made Easy',
                 style: TextStyle(
-                    fontSize: 14, color: AppColors.white.withOpacity(0.9))),
+                    fontSize: 14,
+                    color: AppColors.white.withOpacity(0.9))),
             const SizedBox(height: 40),
             const CircularProgressIndicator(color: AppColors.white),
           ],

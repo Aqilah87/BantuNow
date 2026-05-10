@@ -1043,6 +1043,61 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                     ),
                   ],
 
+                  // ── Unavailable warning banner ──────────────────────────
+                  if (bantuan.posterAvailability == 'unavailable') ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border:
+                            Border.all(color: Colors.grey.withOpacity(0.4)),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                              Icons.do_not_disturb_on_outlined,
+                              color: Colors.grey,
+                              size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isMalay
+                                    ? '⚫ Poster sedang Tidak Available'
+                                    : '⚫ Poster is currently Unavailable',
+                                style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isMalay
+                                    ? 'Poster mungkin lambat respon. Cuba WhatsApp untuk kepastian.'
+                                    : 'Poster may respond slowly. Try WhatsApp to confirm.',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ],
+
                   const SizedBox(height: 20),
 
                   // ── Description card ────────────────────────────────────

@@ -15,7 +15,6 @@ import '../../models/bantuan_model.dart';
 import '../../models/location_model.dart';
 import '../../services/bantuan_service.dart';
 import '../map/map_picker_screen.dart';
-import 'dart:ui' as ui;
 
 class PostBantuanScreen extends StatefulWidget {
   final BantuanModel? existingPost;
@@ -283,6 +282,19 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
 
     final areaData = KualaTerengganuAreas.getAreaById(_selectedAreaId);
 
+    // Ambil availability status user semasa dari Firestore
+    String posterAvailability = 'available';
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (userDoc.exists) {
+        posterAvailability =
+            userDoc.data()?['availability_status'] ?? 'available';
+      }
+    } catch (_) {}
+
     if (_isEditMode) {
       try {
         await FirebaseFirestore.instance
@@ -299,6 +311,7 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
           'image_url': imageUrl,
           'latitude': areaData?.latitude,
           'longitude': areaData?.longitude,
+          'poster_availability': posterAvailability,
           if (_pinLat != null) 'pin_lat': _pinLat,
           if (_pinLon != null) 'pin_lon': _pinLon,
           if (_pinAddress.isNotEmpty) 'pin_address': _pinAddress,
@@ -345,6 +358,7 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
         pinLat: _pinLat,
         pinLon: _pinLon,
         pinAddress: _pinAddress.isNotEmpty ? _pinAddress : null,
+        posterAvailability: posterAvailability,
       );
 
       final result = await _bantuanService.addBantuan(bantuan);
