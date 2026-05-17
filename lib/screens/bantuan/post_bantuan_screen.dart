@@ -29,6 +29,7 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
   final _whatsappController = TextEditingController();
+  final _slotsController = TextEditingController(text: '10');
   final _bantuanService = BantuanService();
   final _imagePicker = ImagePicker();
 
@@ -47,8 +48,16 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
   double? _pinLon;
   String _pinAddress = '';
 
+  // ── Slot system ────────────────────────────────────────────────────
+  // 'single' = Satu Orang | 'multiple' = Ramai Orang (Ada Slot)
+  String _offerType = 'single';
+  // Track sama ada user dah manually override atau masih ikut auto-set
+  bool _userOverrideOfferType = false;
+
   bool get _isEditMode => widget.existingPost != null;
   bool get _hasPinLocation => _pinLat != null && _pinLon != null;
+  // Slot section hanya relevan untuk type == 'offer'
+  bool get _showSlotSection => _selectedType == 'offer';
 
   @override
   void initState() {
@@ -57,6 +66,8 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
       _prefillExistingData();
     } else {
       _loadUserData();
+      // Set default offerType berdasarkan kategori default
+      _offerType = BantuanCategories.getDefaultOfferType(_selectedCategory);
     }
   }
 
@@ -73,6 +84,12 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
     _pinLat = post.pinLat;
     _pinLon = post.pinLon;
     _pinAddress = post.pinAddress ?? '';
+    // Prefill slot data
+    _offerType = post.offerType;
+    if (post.totalSlots != null) {
+      _slotsController.text = post.totalSlots.toString();
+    }
+    _userOverrideOfferType = true; // edit mode = treat as manual
     setState(() => _isLoadingPhone = false);
   }
 
@@ -97,6 +114,33 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
     } catch (_) {} finally {
       setState(() => _isLoadingPhone = false);
     }
+  }
+
+  // ── Auto-set offerType bila category bertukar ──────────────────────
+  void _onCategoryChanged(String? newCat) {
+    if (newCat == null) return;
+    setState(() {
+      _selectedCategory = newCat;
+      // Hanya auto-set kalau user belum manually override
+      if (!_userOverrideOfferType) {
+        _offerType = BantuanCategories.getDefaultOfferType(newCat);
+        // Reset slots ke default 10 bila auto-set ke multiple
+        if (_offerType == 'multiple') {
+          _slotsController.text = '10';
+        }
+      }
+    });
+  }
+
+  // ── User manually tukar offerType ─────────────────────────────────
+  void _onOfferTypeChanged(String newType) {
+    setState(() {
+      _offerType = newType;
+      _userOverrideOfferType = true;
+      if (newType == 'multiple' && _slotsController.text.isEmpty) {
+        _slotsController.text = '10';
+      }
+    });
   }
 
   String _formatWhatsApp(String phone) {
@@ -269,6 +313,22 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
       return;
     }
 
+    // Validate slot count kalau multiple
+    int? totalSlots;
+    if (_selectedType == 'offer' && _offerType == 'multiple') {
+      final parsed = int.tryParse(_slotsController.text.trim());
+      if (parsed == null || parsed < 2 || parsed > 100) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(isMalay
+              ? 'Bilangan slot mesti antara 2 hingga 100'
+              : 'Slot count must be between 2 and 100'),
+          backgroundColor: Colors.orange,
+        ));
+        return;
+      }
+      totalSlots = parsed;
+    }
+
     setState(() => _isLoading = true);
     final user = FirebaseAuth.instance.currentUser!;
 
@@ -282,7 +342,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
 
     final areaData = KualaTerengganuAreas.getAreaById(_selectedAreaId);
 
-    // Ambil availability status user semasa dari Firestore
     String posterAvailability = 'available';
     try {
       final userDoc = await FirebaseFirestore.instance
@@ -294,6 +353,15 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
             userDoc.data()?['availability_status'] ?? 'available';
       }
     } catch (_) {}
+
+    // offerType hanya apply untuk type == 'offer'
+    // Untuk 'request', kita simpan 'single' sebagai default
+    final finalOfferType =
+        _selectedType == 'offer' ? _offerType : 'single';
+    final finalTotalSlots =
+        _selectedType == 'offer' && _offerType == 'multiple'
+            ? totalSlots
+            : null;
 
     if (_isEditMode) {
       try {
@@ -312,6 +380,9 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
           'latitude': areaData?.latitude,
           'longitude': areaData?.longitude,
           'poster_availability': posterAvailability,
+          'offer_type': finalOfferType,
+          if (finalTotalSlots != null) 'total_slots': finalTotalSlots,
+          if (finalTotalSlots == null) 'total_slots': FieldValue.delete(),
           if (_pinLat != null) 'pin_lat': _pinLat,
           if (_pinLon != null) 'pin_lon': _pinLon,
           if (_pinAddress.isNotEmpty) 'pin_address': _pinAddress,
@@ -359,6 +430,9 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
         pinLon: _pinLon,
         pinAddress: _pinAddress.isNotEmpty ? _pinAddress : null,
         posterAvailability: posterAvailability,
+        offerType: finalOfferType,
+        totalSlots: finalTotalSlots,
+        acceptedSlots: 0,
       );
 
       final result = await _bantuanService.addBantuan(bantuan);
@@ -421,22 +495,16 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
               const SizedBox(height: 10),
               Row(children: [
                 _buildTypeChip(
-                  label: isMalay
-                      ? '🙋 Minta Bantuan'
-                      : '🙋 Request Help',
-                  subtitle: isMalay
-                      ? 'Saya perlukan bantuan'
-                      : 'I need help',
+                  label: isMalay ? '🙋 Minta Bantuan' : '🙋 Request Help',
+                  subtitle:
+                      isMalay ? 'Saya perlukan bantuan' : 'I need help',
                   value: 'request',
                   color: Colors.orange,
                 ),
                 const SizedBox(width: 12),
                 _buildTypeChip(
-                  label: isMalay
-                      ? '🤲 Tawar Bantuan'
-                      : '🤲 Offer Help',
-                  subtitle:
-                      isMalay ? 'Saya boleh bantu' : 'I can help',
+                  label: isMalay ? '🤲 Tawar Bantuan' : '🤲 Offer Help',
+                  subtitle: isMalay ? 'Saya boleh bantu' : 'I can help',
                   value: 'offer',
                   color: Colors.green,
                 ),
@@ -464,10 +532,9 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                        color:
-                            (_selectedImage != null || showExistingImage)
-                                ? AppColors.primaryBlue
-                                : AppColors.lightGrey,
+                        color: (_selectedImage != null || showExistingImage)
+                            ? AppColors.primaryBlue
+                            : AppColors.lightGrey,
                         width:
                             (_selectedImage != null || showExistingImage)
                                 ? 2
@@ -570,9 +637,14 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
                           ]),
                         ))
                     .toList(),
-                onChanged: (val) => setState(
-                    () => _selectedCategory = val ?? _selectedCategory),
+                onChanged: _onCategoryChanged,
               ),
+
+              // ── SLOT SECTION (hanya untuk Offer) ───────────────────
+              if (_showSlotSection) ...[
+                const SizedBox(height: 24),
+                _buildSlotSection(isMalay),
+              ],
 
               const SizedBox(height: 24),
 
@@ -721,9 +793,8 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
                     isMalay
                         ? 'Nombor ini akan jadi butang WhatsApp untuk orang hubungi anda terus.'
                         : 'This number will be the WhatsApp button for people to contact you.',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.green.shade700),
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.green.shade700),
                   )),
                 ]),
               ),
@@ -781,12 +852,8 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
                           color: Colors.white)
                       : Text(
                           _isEditMode
-                              ? (isMalay
-                                  ? 'Kemaskini Post'
-                                  : 'Update Post')
-                              : (isMalay
-                                  ? 'Post Bantuan'
-                                  : 'Post Help'),
+                              ? (isMalay ? 'Kemaskini Post' : 'Update Post')
+                              : (isMalay ? 'Post Bantuan' : 'Post Help'),
                           style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -801,7 +868,274 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
     );
   }
 
-  // ── Pin preview — mini map dengan koordinat & alamat ───────────────
+  // ─── SLOT SECTION WIDGET ──────────────────────────────────────────────────
+
+  Widget _buildSlotSection(bool isMalay) {
+    final autoLabel = _userOverrideOfferType
+        ? null
+        : (isMalay ? 'Auto-set berdasarkan kategori' : 'Auto-set by category');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.people_alt_outlined,
+                size: 18, color: AppColors.primaryBlue),
+            const SizedBox(width: 6),
+            Text(
+              isMalay ? 'Jenis Tawaran' : 'Offer Type',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textDark),
+            ),
+            if (autoLabel != null) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  autoLabel,
+                  style: TextStyle(
+                      fontSize: 10, color: AppColors.primaryBlue),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // ── Toggle: Satu Orang vs Ramai Orang ─────────────────────────
+        Row(children: [
+          _buildOfferTypeChip(
+            icon: Icons.person,
+            label: isMalay ? 'Satu Orang' : 'One Person',
+            value: 'single',
+            isMalay: isMalay,
+          ),
+          const SizedBox(width: 12),
+          _buildOfferTypeChip(
+            icon: Icons.groups,
+            label: isMalay ? 'Ramai Orang' : 'Multiple',
+            sublabel: isMalay ? '(Ada Slot)' : '(Has Slots)',
+            value: 'multiple',
+            isMalay: isMalay,
+          ),
+        ]),
+
+        // ── Input slot — hanya tunjuk kalau multiple ──────────────────
+        AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          child: _offerType == 'multiple'
+              ? _buildSlotInput(isMalay)
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOfferTypeChip({
+    required IconData icon,
+    required String label,
+    String? sublabel,
+    required String value,
+    required bool isMalay,
+  }) {
+    final isSelected = _offerType == value;
+    final color = value == 'single' ? AppColors.primaryBlue : Colors.purple;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _onOfferTypeChanged(value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withOpacity(0.08) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? color : AppColors.lightGrey,
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? color.withOpacity(0.15)
+                    : Colors.grey.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon,
+                  size: 18,
+                  color: isSelected ? color : AppColors.textGrey),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? color : AppColors.textDark),
+                  ),
+                  if (sublabel != null)
+                    Text(
+                      sublabel,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: isSelected ? color : AppColors.textGrey),
+                    ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Icon(Icons.check_circle, size: 16, color: color),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlotInput(bool isMalay) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Info banner
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.purple.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(8),
+              border:
+                  Border.all(color: Colors.purple.withOpacity(0.2)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.info_outline,
+                  size: 15, color: Colors.purple),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isMalay
+                      ? 'Tetapkan berapa ramai yang boleh accept tawaran ini.'
+                      : 'Set how many people can accept this offer.',
+                  style: TextStyle(
+                      fontSize: 12, color: Colors.purple.shade700),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                isMalay ? 'Bilangan Slot' : 'Number of Slots',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textDark),
+              ),
+              const Spacer(),
+              // Stepper: kurang
+              _buildStepperButton(
+                icon: Icons.remove,
+                onTap: () {
+                  final current =
+                      int.tryParse(_slotsController.text) ?? 10;
+                  if (current > 2) {
+                    _slotsController.text = (current - 1).toString();
+                    setState(() {});
+                  }
+                },
+              ),
+              const SizedBox(width: 8),
+              // Input field
+              Container(
+                width: 64,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: Colors.purple.withOpacity(0.4), width: 1.5),
+                ),
+                child: TextFormField(
+                  controller: _slotsController,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.purple.shade700),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Stepper: tambah
+              _buildStepperButton(
+                icon: Icons.add,
+                onTap: () {
+                  final current =
+                      int.tryParse(_slotsController.text) ?? 10;
+                  if (current < 100) {
+                    _slotsController.text = (current + 1).toString();
+                    setState(() {});
+                  }
+                },
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 6),
+          Text(
+            isMalay ? 'Min: 2  •  Max: 100' : 'Min: 2  •  Max: 100',
+            style: TextStyle(fontSize: 11, color: AppColors.textGrey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepperButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.purple.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.purple.withOpacity(0.3)),
+        ),
+        child: Icon(icon, size: 18, color: Colors.purple.shade700),
+      ),
+    );
+  }
+
+  // ─── Pin widgets ──────────────────────────────────────────────────────────
+
   Widget _buildPinPreview(bool isMalay) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -839,7 +1173,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
                   ],
                 ),
               ),
-
               Positioned(
                 top: 8,
                 right: 8,
@@ -861,8 +1194,7 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.edit,
-                              size: 13,
-                              color: AppColors.primaryBlue),
+                              size: 13, color: AppColors.primaryBlue),
                           const SizedBox(width: 4),
                           Text(
                             isMalay ? 'Tukar Pin' : 'Change Pin',
@@ -878,7 +1210,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
             ]),
           ),
         ),
-
         Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -908,7 +1239,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
                   ],
                 ),
               ),
-
               if (_pinAddress.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Row(
@@ -929,11 +1259,9 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
                   ],
                 ),
               ],
-
               const SizedBox(height: 10),
               const Divider(height: 1),
               const SizedBox(height: 8),
-
               GestureDetector(
                 onTap: _clearPin,
                 child: Row(
@@ -961,7 +1289,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
     );
   }
 
-  // ── Pin placeholder — belum ada pin ───────────────────────────────
   Widget _buildPinPlaceholder(bool isMalay) {
     return GestureDetector(
       onTap: () => _openMapPicker(isMalay),
@@ -994,8 +1321,8 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
                   isMalay
                       ? 'Tekan untuk pin lokasi tepat pada peta'
                       : 'Tap to pin exact location on map',
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.textGrey),
+                  style:
+                      TextStyle(fontSize: 12, color: AppColors.textGrey),
                 ),
               ],
             ),
@@ -1006,7 +1333,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
     );
   }
 
-  // ── Pin marker widget ──────────────────────────────────────────────
   Widget _buildPinMarker({double size = 36}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1036,7 +1362,8 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
     );
   }
 
-  // ── Helper widgets ─────────────────────────────────────────────────
+  // ─── Helper widgets ───────────────────────────────────────────────────────
+
   Widget _buildSectionLabel(String label, IconData icon) {
     return Row(children: [
       Icon(icon, size: 18, color: AppColors.primaryBlue),
@@ -1058,7 +1385,16 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
     final isSelected = _selectedType == value;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _selectedType = value),
+        onTap: () => setState(() {
+          _selectedType = value;
+          // Reset override supaya auto-set boleh apply semula
+          if (!_isEditMode) _userOverrideOfferType = false;
+          // Re-apply auto-set berdasarkan kategori semasa
+          if (value == 'offer' && !_userOverrideOfferType) {
+            _offerType =
+                BantuanCategories.getDefaultOfferType(_selectedCategory);
+          }
+        }),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -1075,8 +1411,7 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
                     style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color:
-                            isSelected ? color : AppColors.textDark)),
+                        color: isSelected ? color : AppColors.textDark)),
                 const SizedBox(height: 4),
                 Text(subtitle,
                     style: TextStyle(
@@ -1150,13 +1485,12 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
     _titleController.dispose();
     _descController.dispose();
     _whatsappController.dispose();
+    _slotsController.dispose();
     super.dispose();
   }
 }
 
-// ── Pin tail painter ───────────────────────────────────────────────────
-// FIX: Buang import 'dart:ui' as ui — guna Path() dari flutter/material.dart
-// FIX: Tukar cascade notation (..) kepada explicit method calls
+// ── Pin tail painter ───────────────────────────────────────────────────────
 class _PinTailPainter extends CustomPainter {
   final Color color;
   const _PinTailPainter({required this.color});

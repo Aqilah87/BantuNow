@@ -9,7 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart' hide Path; // ← FIX: hide Path dari latlong2
+import 'package:latlong2/latlong.dart' hide Path;
 import '../../utils/colors.dart';
 import '../../providers/language_provider.dart';
 import '../../models/bantuan_model.dart';
@@ -47,8 +47,24 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
   String? get _currentUid => FirebaseAuth.instance.currentUser?.uid;
 
-  bool get _isAssignedHelper =>
-      _currentUid != null && _bantuan.helperUid == _currentUid;
+  // Untuk single: check helper_uid
+  // Untuk multiple: check dalam helper_uids array
+  bool get _isAssignedHelper {
+    if (_currentUid == null) return false;
+    if (_bantuan.isMultipleSlot) {
+      return _bantuan.helperUids.contains(_currentUid);
+    }
+    return _bantuan.helperUid == _currentUid;
+  }
+
+  // Semak kalau current user dah join (multiple)
+  bool get _hasAlreadyJoined {
+    if (_currentUid == null) return false;
+    if (_bantuan.isMultipleSlot) {
+      return _bantuan.helperUids.contains(_currentUid);
+    }
+    return false;
+  }
 
   @override
   void initState() {
@@ -74,7 +90,19 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     }
   }
 
-  // ─── Status helpers ───────────────────────────────────────────────────────────
+  // ─── Refresh bantuan dari Firestore ───────────────────────────────
+  Future<void> _refreshBantuan() async {
+    final updated = await FirebaseFirestore.instance
+        .collection('bantuan')
+        .doc(_bantuan.id)
+        .get();
+    if (mounted && updated.exists) {
+      setState(
+          () => _bantuan = BantuanModel.fromMap(updated.data()!, updated.id));
+    }
+  }
+
+  // ─── Status helpers ────────────────────────────────────────────────
 
   Color _statusColor(String status) {
     switch (status) {
@@ -82,6 +110,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         return Colors.green;
       case 'in_progress':
         return Colors.orange;
+      case 'full':
+        return Colors.purple;
       default:
         return Colors.grey;
     }
@@ -93,6 +123,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         return isMalay ? 'Aktif' : 'Active';
       case 'in_progress':
         return isMalay ? 'Sedang Dibantu' : 'In Progress';
+      case 'full':
+        return isMalay ? 'Slot Penuh' : 'Full';
       default:
         return isMalay ? 'Selesai' : 'Completed';
     }
@@ -104,12 +136,14 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         return Icons.check_circle;
       case 'in_progress':
         return Icons.handshake_outlined;
+      case 'full':
+        return Icons.people_alt;
       default:
         return Icons.task_alt;
     }
   }
 
-  // ─── Phone / WhatsApp ─────────────────────────────────────────────────────────
+  // ─── Phone / WhatsApp ──────────────────────────────────────────────
 
   String _formatPhoneDisplay(String phone) {
     if (phone.isEmpty) return '';
@@ -159,9 +193,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     }
   }
 
-  // ─── Navigation (Google Maps & Waze) ─────────────────────────────────────────
+  // ─── Navigation ────────────────────────────────────────────────────
 
-  /// Buka bottom sheet untuk pilih Google Maps atau Waze
   void _showNavigationSheet(BuildContext context, double lat, double lon,
       String title, bool isMalay) {
     showModalBottomSheet(
@@ -173,7 +206,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Handle bar
             Container(
               width: 40,
               height: 4,
@@ -182,7 +214,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   color: Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(2)),
             ),
-
             Text(
               isMalay ? 'Navigate ke Lokasi' : 'Navigate to Location',
               style: TextStyle(
@@ -192,20 +223,14 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              isMalay
-                  ? 'Pilih aplikasi navigasi'
-                  : 'Choose navigation app',
+              isMalay ? 'Pilih aplikasi navigasi' : 'Choose navigation app',
               style: TextStyle(fontSize: 13, color: AppColors.textGrey),
             ),
             const SizedBox(height: 24),
-
-            // Butang Google Maps & Waze
             Row(
               children: [
-                // Google Maps
                 Expanded(
                   child: _buildNavOption(
-                    svgAsset: null,
                     icon: Icons.map,
                     iconColor: const Color(0xFF4285F4),
                     bgColor: const Color(0xFF4285F4).withOpacity(0.1),
@@ -217,10 +242,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   ),
                 ),
                 const SizedBox(width: 16),
-                // Waze
                 Expanded(
                   child: _buildNavOption(
-                    svgAsset: null,
                     icon: Icons.navigation,
                     iconColor: const Color(0xFF05C8F7),
                     bgColor: const Color(0xFF05C8F7).withOpacity(0.1),
@@ -241,7 +264,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
   }
 
   Widget _buildNavOption({
-    String? svgAsset,
     required IconData icon,
     required Color iconColor,
     required Color bgColor,
@@ -261,54 +283,34 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           children: [
             Icon(icon, size: 36, color: iconColor),
             const SizedBox(height: 10),
-            Text(
-              label,
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: iconColor),
-            ),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: iconColor)),
           ],
         ),
       ),
     );
   }
 
-  /// Buka Google Maps dengan koordinat
   Future<void> _openGoogleMaps(
       double lat, double lon, String label, bool isMalay) async {
-    // goo.gl/maps URL — buka app Google Maps kalau ada, browser kalau tak ada
     final uri = Uri.parse(
         'https://www.google.com/maps/search/?api=1&query=$lat,$lon');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(isMalay
-              ? 'Tidak dapat membuka Google Maps'
-              : 'Cannot open Google Maps'),
-        ));
-      }
     }
   }
 
-  /// Buka Waze dengan koordinat
   Future<void> _openWaze(double lat, double lon, bool isMalay) async {
     final uri = Uri.parse('https://waze.com/ul?ll=$lat,$lon&navigate=yes');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              isMalay ? 'Tidak dapat membuka Waze' : 'Cannot open Waze'),
-        ));
-      }
     }
   }
 
-  // ─── Share ────────────────────────────────────────────────────────────────────
+  // ─── Share ─────────────────────────────────────────────────────────
 
   void _sharePost(bool isMalay) {
     final bantuan = _bantuan;
@@ -348,9 +350,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
   void _shareViaWhatsApp() async {
     final link = DeepLinkService.generatePostLink(_bantuan.id);
-    final bantuan = _bantuan;
-    final message =
-        Uri.encodeComponent('🙌 *${bantuan.title}*\n📍 ${bantuan.area}\n\n$link');
+    final message = Uri.encodeComponent(
+        '🙌 *${_bantuan.title}*\n📍 ${_bantuan.area}\n\n$link');
     final url = Uri.parse('https://wa.me/?text=$message');
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -427,7 +428,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                 Expanded(
                     child: Text(
                   DeepLinkService.generatePostLink(_bantuan.id),
-                  style: TextStyle(fontSize: 11, color: AppColors.primaryBlue),
+                  style:
+                      TextStyle(fontSize: 11, color: AppColors.primaryBlue),
                   overflow: TextOverflow.ellipsis,
                 )),
               ]),
@@ -468,7 +470,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     );
   }
 
-  // ─── Actions ──────────────────────────────────────────────────────────────────
+  // ─── ACTIONS ───────────────────────────────────────────────────────
 
   Future<void> _acceptHelp(bool isMalay) async {
     if (!widget.isLoggedIn) {
@@ -476,7 +478,11 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
       return;
     }
 
+    final isOffer = _bantuan.type == 'offer';
+    final isMultiple = _bantuan.isMultipleSlot;
     final user = FirebaseAuth.instance.currentUser!;
+
+    // Ambil nama user
     String helperName = user.displayName ?? '';
     try {
       final doc = await FirebaseFirestore.instance
@@ -486,14 +492,36 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
       if (doc.exists) helperName = doc.data()?['name'] ?? helperName;
     } catch (_) {}
 
+    // ── Dialog confirm ─────────────────────────────────────────────
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(isMalay ? 'Nak Bantu?' : 'Offer Help?'),
-        content: Text(isMalay
-            ? 'Anda akan ditandakan sebagai helper untuk post ini. Pastikan anda bersedia untuk membantu.'
-            : 'You will be marked as the helper for this post. Make sure you are ready to help.'),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          isOffer
+              ? (isMultiple
+                  ? (isMalay
+                      ? 'Daftar Slot Ini?'
+                      : 'Join This Slot?')
+                  : (isMalay
+                      ? 'Berminat dengan Tawaran Ini?'
+                      : 'Interested in This Offer?'))
+              : (isMalay ? 'Nak Bantu?' : 'Offer Help?'),
+        ),
+        content: Text(
+          isOffer
+              ? (isMultiple
+                  ? (isMalay
+                      ? 'Anda akan didaftarkan sebagai salah seorang peserta. Slot akan berkurang selepas ini.'
+                      : 'You will be registered as one of the participants. A slot will be taken.')
+                  : (isMalay
+                      ? 'Anda akan dihubungkan dengan poster yang menawarkan bantuan ini.'
+                      : 'You will be connected with the poster offering this help.'))
+              : (isMalay
+                  ? 'Anda akan ditandakan sebagai helper untuk post ini.'
+                  : 'You will be marked as the helper for this post.'),
+        ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -501,9 +529,21 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   style: TextStyle(color: AppColors.textGrey))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: Text(isMalay ? 'Ya, Saya Bantu' : "Yes, I'll Help",
-                style: const TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isOffer
+                  ? (isMultiple ? Colors.purple : AppColors.primaryBlue)
+                  : Colors.orange,
+            ),
+            child: Text(
+              isOffer
+                  ? (isMultiple
+                      ? (isMalay ? 'Ya, Daftar' : 'Yes, Join')
+                      : (isMalay
+                          ? 'Ya, Saya Berminat'
+                          : "Yes, I'm Interested"))
+                  : (isMalay ? 'Ya, Saya Bantu' : "Yes, I'll Help"),
+              style: const TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -511,33 +551,87 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     if (confirm != true) return;
 
     setState(() => _isActionLoading = true);
+
     try {
-      await FirebaseFirestore.instance
-          .collection('bantuan')
-          .doc(_bantuan.id)
-          .update({
-        'status': 'in_progress',
-        'helper_uid': user.uid,
-        'helper_name': helperName,
-        'helper_confirmed': false,
-      });
+      // ── MULTIPLE SLOT LOGIC ──────────────────────────────────────
+      if (isOffer && isMultiple) {
+        final result = await _bantuanService.acceptMultipleSlot(
+          postId: _bantuan.id,
+          helperUid: user.uid,
+          helperName: helperName,
+          currentAccepted: _bantuan.acceptedSlots,
+          totalSlots: _bantuan.totalSlots ?? 0,
+        );
 
-      final updated = await FirebaseFirestore.instance
-          .collection('bantuan')
-          .doc(_bantuan.id)
-          .get();
-      if (mounted && updated.exists) {
-        setState(
-            () => _bantuan = BantuanModel.fromMap(updated.data()!, updated.id));
-      }
+        if (result['success'] == true) {
+          await _refreshBantuan();
+          if (mounted) {
+            final isFull = result['is_full'] == true;
+            final remaining = result['remaining'] as int? ?? 0;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                isFull
+                    ? (isMalay
+                        ? '✅ Berjaya daftar! Slot kini penuh.'
+                        : '✅ Joined! Slots are now full.')
+                    : (isMalay
+                        ? '✅ Berjaya daftar! $remaining slot lagi tersedia.'
+                        : '✅ Joined! $remaining slot(s) remaining.'),
+              ),
+              backgroundColor: Colors.purple,
+            ));
+          }
+        } else {
+          // Handle error cases
+          final msg = result['message'] as String? ?? '';
+          if (mounted) {
+            String errorText;
+            if (msg == 'already_joined') {
+              errorText = isMalay
+                  ? 'Anda sudah mendaftar untuk slot ini.'
+                  : 'You have already joined this slot.';
+            } else if (msg == 'slot_full') {
+              errorText = isMalay
+                  ? 'Maaf, semua slot telah penuh.'
+                  : 'Sorry, all slots are full.';
+            } else {
+              errorText = 'Error: $msg';
+            }
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(errorText)));
+          }
+        }
+      } else {
+        // ── SINGLE LOGIC (offer single atau request) ─────────────
+        final result = await _bantuanService.acceptSingleHelp(
+          postId: _bantuan.id,
+          helperUid: user.uid,
+          helperName: helperName,
+        );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(isMalay
-              ? '🤝 Anda telah menjadi helper!'
-              : '🤝 You are now the helper!'),
-          backgroundColor: Colors.orange,
-        ));
+        if (result['success'] == true) {
+          await _refreshBantuan();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                isOffer
+                    ? (isMalay
+                        ? '✅ Anda telah menyatakan minat!'
+                        : '✅ You have expressed interest!')
+                    : (isMalay
+                        ? '🤝 Anda telah menjadi helper!'
+                        : '🤝 You are now the helper!'),
+              ),
+              backgroundColor:
+                  isOffer ? AppColors.primaryBlue : Colors.orange,
+            ));
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error: ${result['message']}')));
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -553,11 +647,12 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(isMalay ? 'Dah Selesai Bantu?' : 'Done Helping?'),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isMalay ? 'Dah Selesai?' : 'Done?'),
         content: Text(isMalay
-            ? 'Sahkan bahawa anda telah berjaya membantu. Owner akan dimaklumkan untuk mengesahkan.'
-            : 'Confirm that you have successfully helped. The owner will be notified to confirm.'),
+            ? 'Sahkan bahawa anda telah berjaya. Owner akan dimaklumkan.'
+            : 'Confirm that you have completed. The owner will be notified.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -566,7 +661,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: Text(isMalay ? 'Ya, Dah Bantu' : 'Yes, Done',
+            child: Text(isMalay ? 'Ya, Selesai' : 'Yes, Done',
                 style: const TextStyle(color: Colors.white)),
           ),
         ],
@@ -578,15 +673,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     try {
       final result = await _bantuanService.helperConfirm(_bantuan.id);
       if (result['success'] != true) throw result['message'];
-
-      final updated = await FirebaseFirestore.instance
-          .collection('bantuan')
-          .doc(_bantuan.id)
-          .get();
-      if (mounted && updated.exists) {
-        setState(
-            () => _bantuan = BantuanModel.fromMap(updated.data()!, updated.id));
-      }
+      await _refreshBantuan();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -624,7 +711,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(isMalay ? 'Sahkan Selesai?' : 'Confirm Complete?'),
         content: Text(isMalay
             ? 'Sahkan bantuan telah selesai dan nilai helper anda.'
@@ -636,7 +724,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   style: TextStyle(color: AppColors.textGrey))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: Colors.green),
             child: Text(isMalay ? 'Ya, Selesai' : 'Yes, Complete',
                 style: const TextStyle(color: Colors.white)),
           ),
@@ -678,8 +767,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(isMalay
-            ? '✅ Post ditutup. Terima kasih kerana menggunakan BantuNow!'
-            : '✅ Post closed. Thank you for using BantuNow!'),
+            ? '✅ Post ditutup. Terima kasih!'
+            : '✅ Post closed. Thank you!'),
         backgroundColor: Colors.green,
       ));
       Navigator.pop(context);
@@ -690,11 +779,12 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(isMalay ? 'Padam Post?' : 'Delete Post?'),
         content: Text(isMalay
-            ? 'Adakah anda pasti mahu memadam post ini? Tindakan ini tidak boleh dibatalkan.'
-            : 'Are you sure you want to delete this post? This action cannot be undone.'),
+            ? 'Adakah anda pasti? Tindakan ini tidak boleh dibatalkan.'
+            : 'Are you sure? This action cannot be undone.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -728,9 +818,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     } catch (e) {
       setState(() => _isActionLoading = false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              '${isMalay ? 'Gagal memadam' : 'Failed to delete'}: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${isMalay ? 'Gagal' : 'Failed'}: $e')));
     }
   }
 
@@ -738,11 +827,12 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(isMalay ? 'Tukar Helper?' : 'Change Helper?'),
         content: Text(isMalay
-            ? 'Helper semasa akan dibuang dan post akan dibuka semula untuk helper lain. Tindakan ini tidak boleh dibatalkan.'
-            : 'The current helper will be removed and the post will be reopened for others. This cannot be undone.'),
+            ? 'Helper semasa akan dibuang dan post akan dibuka semula.'
+            : 'The current helper will be removed and the post reopened.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -750,7 +840,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   style: TextStyle(color: AppColors.textGrey))),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             child: Text(isMalay ? 'Ya, Buka Semula' : 'Yes, Reopen',
                 style: const TextStyle(color: Colors.white)),
           ),
@@ -771,21 +862,12 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         'helper_confirmed': false,
         'helper_confirmed_at': FieldValue.delete(),
       });
-
-      final updated = await FirebaseFirestore.instance
-          .collection('bantuan')
-          .doc(_bantuan.id)
-          .get();
-      if (mounted && updated.exists) {
-        setState(
-            () => _bantuan = BantuanModel.fromMap(updated.data()!, updated.id));
-      }
-
+      await _refreshBantuan();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(isMalay
-              ? '🔄 Post dibuka semula untuk helper lain.'
-              : '🔄 Post reopened for other helpers.'),
+              ? '🔄 Post dibuka semula.'
+              : '🔄 Post reopened.'),
           backgroundColor: Colors.orange,
         ));
       }
@@ -798,8 +880,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
       if (mounted) setState(() => _isActionLoading = false);
     }
   }
-
-  // ─── Open full map view ───────────────────────────────────────────────────────
 
   void _openFullMap(bool isMalay) {
     Navigator.push(
@@ -816,7 +896,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     );
   }
 
-  // ─── Build ────────────────────────────────────────────────────────────────────
+  // ─── Build ─────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -827,7 +907,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     final typeLabel = isRequest
         ? (isMalay ? 'Minta Bantuan' : 'Request Help')
         : (isMalay ? 'Tawar Bantuan' : 'Offer Help');
-
     final statusColor = _statusColor(bantuan.status);
     final statusLabel = _statusLabel(bantuan.status, isMalay);
     final statusIcon = _statusIcon(bantuan.status);
@@ -858,8 +937,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.4),
                       shape: BoxShape.circle),
-                  child:
-                      const Icon(Icons.share, color: Colors.white, size: 20),
+                  child: const Icon(Icons.share,
+                      color: Colors.white, size: 20),
                 ),
                 onPressed: () => _showShareSheet(isMalay),
               ),
@@ -893,7 +972,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               background: bantuan.imageUrl != null
                   ? Image.network(bantuan.imageUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _buildImagePlaceholder())
+                      errorBuilder: (_, __, ___) =>
+                          _buildImagePlaceholder())
                   : _buildImagePlaceholder(),
             ),
           ),
@@ -905,7 +985,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
 
-                  // ── Type / Category / Status chips ──────────────────────
+                  // ── Type / Category / Status chips ─────────────────
                   Row(children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -913,7 +993,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                       decoration: BoxDecoration(
                         color: typeColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: typeColor.withOpacity(0.3)),
+                        border:
+                            Border.all(color: typeColor.withOpacity(0.3)),
                       ),
                       child: Text(typeLabel,
                           style: TextStyle(
@@ -941,10 +1022,11 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
-                        border:
-                            Border.all(color: statusColor.withOpacity(0.3)),
+                        border: Border.all(
+                            color: statusColor.withOpacity(0.3)),
                       ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      child:
+                          Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(statusIcon, size: 12, color: statusColor),
                         const SizedBox(width: 4),
                         Text(statusLabel,
@@ -983,8 +1065,15 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                             fontSize: 13, color: AppColors.primaryBlue)),
                   ]),
 
-                  // ── In-progress banner ──────────────────────────────────
-                  if (bantuan.status == 'in_progress') ...[
+                  // ── SLOT PROGRESS BANNER (multiple offer) ──────────
+                  if (bantuan.type == 'offer' && bantuan.isMultipleSlot) ...[
+                    const SizedBox(height: 16),
+                    _buildSlotProgressBanner(bantuan, isMalay),
+                  ],
+
+                  // ── In-progress banner (single only) ───────────────
+                  if (bantuan.status == 'in_progress' &&
+                      !bantuan.isMultipleSlot) ...[
                     const SizedBox(height: 16),
                     Container(
                       width: double.infinity,
@@ -993,8 +1082,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                       decoration: BoxDecoration(
                         color: Colors.orange.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(12),
-                        border:
-                            Border.all(color: Colors.orange.withOpacity(0.3)),
+                        border: Border.all(
+                            color: Colors.orange.withOpacity(0.3)),
                       ),
                       child: Row(children: [
                         const Icon(Icons.handshake_outlined,
@@ -1005,16 +1094,19 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                isMalay
-                                    ? 'Sedang dibantu oleh:'
-                                    : 'Currently being helped by:',
+                                bantuan.type == 'offer'
+                                    ? (isMalay
+                                        ? 'Diminati oleh:'
+                                        : 'Interested party:')
+                                    : (isMalay
+                                        ? 'Sedang dibantu oleh:'
+                                        : 'Being helped by:'),
                                 style: TextStyle(
                                     fontSize: 11,
                                     color: Colors.orange.shade700),
                               ),
                               Text(
-                                bantuan.helperName ??
-                                    (isMalay ? 'Helper' : 'Helper'),
+                                bantuan.helperName ?? 'Helper',
                                 style: const TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
@@ -1043,7 +1135,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                     ),
                   ],
 
-                  // ── Unavailable warning banner ──────────────────────────
+                  // ── Unavailable banner ─────────────────────────────
                   if (bantuan.posterAvailability == 'unavailable') ...[
                     const SizedBox(height: 16),
                     Container(
@@ -1053,8 +1145,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                       decoration: BoxDecoration(
                         color: Colors.grey.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(12),
-                        border:
-                            Border.all(color: Colors.grey.withOpacity(0.4)),
+                        border: Border.all(
+                            color: Colors.grey.withOpacity(0.4)),
                       ),
                       child: Row(children: [
                         Container(
@@ -1085,8 +1177,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 isMalay
-                                    ? 'Poster mungkin lambat respon. Cuba WhatsApp untuk kepastian.'
-                                    : 'Poster may respond slowly. Try WhatsApp to confirm.',
+                                    ? 'Cuba WhatsApp untuk kepastian.'
+                                    : 'Try WhatsApp to confirm.',
                                 style: TextStyle(
                                     fontSize: 11,
                                     color: Colors.grey.shade600),
@@ -1100,7 +1192,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 20),
 
-                  // ── Description card ────────────────────────────────────
+                  // ── Description card ───────────────────────────────
                   _buildCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1118,7 +1210,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                     ),
                   ),
 
-                  // ── Pin lokasi map card ─────────────────────────────────
+                  // ── Pin lokasi map card ────────────────────────────
                   if (bantuan.pinLat != null && bantuan.pinLon != null) ...[
                     const SizedBox(height: 16),
                     _buildCard(
@@ -1130,8 +1222,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                             Icons.pin_drop,
                           ),
                           const SizedBox(height: 12),
-
-                          // Mini map preview
                           ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: SizedBox(
@@ -1141,12 +1231,13 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                   child: FlutterMap(
                                     options: MapOptions(
                                       initialCenter: LatLng(
-                                          bantuan.pinLat!, bantuan.pinLon!),
+                                          bantuan.pinLat!,
+                                          bantuan.pinLon!),
                                       initialZoom: 16,
                                       interactionOptions:
                                           const InteractionOptions(
-                                        flags: InteractiveFlag.none,
-                                      ),
+                                              flags:
+                                                  InteractiveFlag.none),
                                     ),
                                     children: [
                                       TileLayer(
@@ -1168,135 +1259,98 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                     ],
                                   ),
                                 ),
-
-                                // ── Overlay buttons (Navigate + Buka Peta) ──
                                 Positioned(
                                   bottom: 10,
                                   left: 10,
                                   right: 10,
-                                  child: Row(
-                                    children: [
-                                      // Navigate button
-                                      GestureDetector(
-                                        onTap: () => _showNavigationSheet(
-                                            context,
-                                            bantuan.pinLat!,
-                                            bantuan.pinLon!,
-                                            bantuan.title,
-                                            isMalay),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 7),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.primaryBlue,
-                                            borderRadius:
-                                                BorderRadius.circular(20),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                  color: Colors.black
-                                                      .withOpacity(0.18),
-                                                  blurRadius: 6)
-                                            ],
-                                          ),
-                                          child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(Icons.navigation,
-                                                    size: 13,
-                                                    color: Colors.white),
-                                                const SizedBox(width: 5),
-                                                Text(
-                                                  isMalay
-                                                      ? 'Navigate'
-                                                      : 'Navigate',
-                                                  style: const TextStyle(
+                                  child: Row(children: [
+                                    GestureDetector(
+                                      onTap: () => _showNavigationSheet(
+                                          context,
+                                          bantuan.pinLat!,
+                                          bantuan.pinLon!,
+                                          bantuan.title,
+                                          isMalay),
+                                      child: Container(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 7),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.primaryBlue,
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                          boxShadow: [
+                                            BoxShadow(
+                                                color: Colors.black
+                                                    .withOpacity(0.18),
+                                                blurRadius: 6)
+                                          ],
+                                        ),
+                                        child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.navigation,
+                                                  size: 13,
+                                                  color: Colors.white),
+                                              const SizedBox(width: 5),
+                                              const Text('Navigate',
+                                                  style: TextStyle(
                                                       fontSize: 12,
                                                       color: Colors.white,
                                                       fontWeight:
-                                                          FontWeight.w600),
-                                                ),
-                                              ]),
-                                        ),
+                                                          FontWeight.w600)),
+                                            ]),
                                       ),
-                                      const Spacer(),
-                                      // Buka Peta button
-                                      GestureDetector(
-                                        onTap: () => _openFullMap(isMalay),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 7),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            borderRadius:
-                                                BorderRadius.circular(20),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                  color: Colors.black
-                                                      .withOpacity(0.12),
-                                                  blurRadius: 6)
-                                            ],
-                                          ),
-                                          child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(Icons.open_in_full,
-                                                    size: 13,
-                                                    color:
-                                                        AppColors.primaryBlue),
-                                                const SizedBox(width: 5),
-                                                Text(
+                                    ),
+                                    const Spacer(),
+                                    GestureDetector(
+                                      onTap: () => _openFullMap(isMalay),
+                                      child: Container(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 7),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                          boxShadow: [
+                                            BoxShadow(
+                                                color: Colors.black
+                                                    .withOpacity(0.12),
+                                                blurRadius: 6)
+                                          ],
+                                        ),
+                                        child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.open_in_full,
+                                                  size: 13,
+                                                  color:
+                                                      AppColors.primaryBlue),
+                                              const SizedBox(width: 5),
+                                              Text(
                                                   isMalay
                                                       ? 'Buka Peta'
                                                       : 'Open Map',
                                                   style: TextStyle(
                                                       fontSize: 12,
-                                                      color:
-                                                          AppColors.primaryBlue,
+                                                      color: AppColors
+                                                          .primaryBlue,
                                                       fontWeight:
-                                                          FontWeight.w600),
-                                                ),
-                                              ]),
-                                        ),
+                                                          FontWeight.w600)),
+                                            ]),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ]),
                                 ),
                               ]),
                             ),
                           ),
-
                           const SizedBox(height: 10),
-
-                          // Koordinat pill
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: AppColors.backgroundBlue,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.gps_fixed,
-                                    size: 11, color: AppColors.primaryBlue),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${bantuan.pinLat!.toStringAsFixed(6)}, '
-                                  '${bantuan.pinLon!.toStringAsFixed(6)}',
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      color: AppColors.primaryBlue,
-                                      fontFamily: 'monospace'),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Alamat
                           if (bantuan.pinAddress != null &&
                               bantuan.pinAddress!.isNotEmpty) ...[
-                            const SizedBox(height: 8),
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -1304,20 +1358,16 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                     size: 14, color: AppColors.textGrey),
                                 const SizedBox(width: 4),
                                 Expanded(
-                                  child: Text(
-                                    bantuan.pinAddress!,
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textDark,
-                                        height: 1.4),
-                                  ),
+                                  child: Text(bantuan.pinAddress!,
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textDark,
+                                          height: 1.4)),
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 12),
                           ],
-
-                          // ── Navigate button bawah card ──────────────────
-                          const SizedBox(height: 12),
                           const Divider(height: 1),
                           const SizedBox(height: 12),
                           SizedBox(
@@ -1345,8 +1395,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(10)),
                                 elevation: 0,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 12),
                               ),
                             ),
                           ),
@@ -1357,7 +1407,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 16),
 
-                  // ── User info card ──────────────────────────────────────
+                  // ── User info card ─────────────────────────────────
                   _buildCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1366,7 +1416,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                             isMalay ? 'Maklumat Pengguna' : 'User Info',
                             Icons.person_outline),
                         const SizedBox(height: 14),
-                        // ── Tappable profile row ──────────────────────
                         GestureDetector(
                           onTap: () => Navigator.push(
                             context,
@@ -1394,7 +1443,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
                                   children: [
                                     Text(bantuan.postedBy,
                                         style: TextStyle(
@@ -1402,69 +1452,12 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                             fontWeight: FontWeight.w600,
                                             color: AppColors.textDark)),
                                     const SizedBox(height: 3),
-                                    // ── Average rating inline ─────────
-                                    FutureBuilder<DocumentSnapshot>(
-                                      future: FirebaseFirestore.instance
-                                          .collection('users')
-                                          .doc(bantuan.postedByUid)
-                                          .get(),
-                                      builder: (ctx, snap) {
-                                        if (!snap.hasData || !snap.data!.exists) {
-                                          return Text(bantuan.area,
-                                              style: TextStyle(
-                                                  fontSize: 13,
-                                                  color: AppColors.textGrey));
-                                        }
-                                        final data = snap.data!.data()
-                                            as Map<String, dynamic>;
-                                        final avg = (data['rating'] as num?)
-                                                ?.toDouble() ??
-                                            0.0;
-                                        final count =
-                                            (data['rating_count'] as num?)
-                                                    ?.toInt() ??
-                                                0;
-                                        return Row(children: [
-                                          if (count > 0) ...[
-                                            Icon(Icons.star_rounded,
-                                                size: 14,
-                                                color: Colors.amber),
-                                            const SizedBox(width: 3),
-                                            Text(
-                                              avg.toStringAsFixed(1),
-                                              style: TextStyle(
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: AppColors.textDark),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              '($count)',
-                                              style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: AppColors.textGrey),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Container(
-                                              width: 4,
-                                              height: 4,
-                                              decoration: BoxDecoration(
-                                                color: AppColors.textGrey,
-                                                shape: BoxShape.circle,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                          ],
-                                          Text(bantuan.area,
-                                              style: TextStyle(
-                                                  fontSize: 13,
-                                                  color: AppColors.textGrey)),
-                                        ]);
-                                      },
-                                    ),
+                                    Text(bantuan.area,
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            color: AppColors.textGrey)),
                                   ]),
                             ),
-                            // Arrow hint
                             Icon(Icons.chevron_right,
                                 color: AppColors.textGrey, size: 20),
                           ]),
@@ -1499,7 +1492,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                         child: LinearProgressIndicator())
                                     : Text(
                                         widget.isLoggedIn
-                                            ? (_formatPhoneDisplay(_posterPhone)
+                                            ? (_formatPhoneDisplay(
+                                                        _posterPhone)
                                                     .isEmpty
                                                 ? (isMalay
                                                     ? 'Tidak tersedia'
@@ -1518,9 +1512,10 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                           if (!widget.isLoggedIn) ...[
                             const Spacer(),
                             TextButton(
-                              onPressed: () => widget.onLoginRequired(isMalay
-                                  ? 'melihat nombor telefon'
-                                  : 'view phone number'),
+                              onPressed: () => widget.onLoginRequired(
+                                  isMalay
+                                      ? 'melihat nombor telefon'
+                                      : 'view phone number'),
                               child: Text(
                                   isMalay
                                       ? 'Login untuk lihat'
@@ -1562,7 +1557,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 24),
 
-                  // ── Share button ────────────────────────────────────────
+                  // ── Share button ───────────────────────────────────
                   SizedBox(
                     width: double.infinity,
                     height: 48,
@@ -1570,7 +1565,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                       onPressed: () => _showShareSheet(isMalay),
                       icon: Icon(Icons.share,
                           color: AppColors.primaryBlue, size: 18),
-                      label: Text(isMalay ? 'Kongsi Post' : 'Share Post',
+                      label: Text(
+                          isMalay ? 'Kongsi Post' : 'Share Post',
                           style: TextStyle(
                               color: AppColors.primaryBlue,
                               fontSize: 14,
@@ -1585,7 +1581,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 12),
 
-                  // ── WhatsApp button ─────────────────────────────────────
+                  // ── WhatsApp button ────────────────────────────────
                   SizedBox(
                     width: double.infinity,
                     height: 54,
@@ -1611,7 +1607,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                     ),
                   ),
 
-                  // ── Action buttons ──────────────────────────────────────
+                  // ── Action buttons ─────────────────────────────────
                   ..._buildActionButtons(isMalay),
 
                   if (_isActionLoading)
@@ -1630,41 +1626,130 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     );
   }
 
-  // ── Pin marker widget ──────────────────────────────────────────────────────
-  Widget _buildPinMarker() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: AppColors.primaryBlue,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2.5),
-            boxShadow: [
-              BoxShadow(
-                  color: AppColors.primaryBlue.withOpacity(0.4),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2))
-            ],
+  // ─── SLOT PROGRESS BANNER ─────────────────────────────────────────
+
+  Widget _buildSlotProgressBanner(BantuanModel bantuan, bool isMalay) {
+    final total = bantuan.totalSlots ?? 0;
+    final accepted = bantuan.acceptedSlots;
+    final remaining = bantuan.remainingSlots;
+    final isFull = bantuan.status == 'full';
+    final progress = total > 0 ? accepted / total : 0.0;
+
+    final color = isFull ? Colors.purple : Colors.teal;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.people_alt_outlined, size: 18, color: color),
+            const SizedBox(width: 8),
+            Text(
+              isMalay ? 'Slot Tawaran' : 'Offer Slots',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: color),
+            ),
+            const Spacer(),
+            // Badge: X/Y slot
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '$accepted / $total',
+                style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
+              ),
+            ),
+          ]),
+
+          const SizedBox(height: 12),
+
+          // Progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 8,
+              backgroundColor: color.withOpacity(0.15),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
           ),
-          child: const Icon(Icons.location_on, color: Colors.white, size: 20),
-        ),
-        CustomPaint(
-          size: const Size(12, 8),
-          painter: _PinTailPainter(color: AppColors.primaryBlue),
-        ),
-      ],
+
+          const SizedBox(height: 10),
+
+          // Status text
+          Text(
+            isFull
+                ? (isMalay
+                    ? '🔴 Semua slot telah penuh'
+                    : '🔴 All slots are full')
+                : (isMalay
+                    ? '🟢 $remaining slot lagi tersedia'
+                    : '🟢 $remaining slot(s) remaining'),
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: isFull ? Colors.red.shade700 : Colors.teal.shade700),
+          ),
+
+          // Kalau user dah join — tunjuk badge
+          if (_hasAlreadyJoined) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.check_circle,
+                    size: 14, color: Colors.green),
+                const SizedBox(width: 6),
+                Text(
+                  isMalay
+                      ? 'Anda telah mendaftar slot ini'
+                      : 'You have joined this slot',
+                  style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.green,
+                      fontWeight: FontWeight.w500),
+                ),
+              ]),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
+  // ─── ACTION BUTTONS ────────────────────────────────────────────────
+
   List<Widget> _buildActionButtons(bool isMalay) {
     final status = _bantuan.status;
+    final isOffer = _bantuan.type == 'offer';
+    final isMultiple = _bantuan.isMultipleSlot;
     final widgets = <Widget>[];
 
     if (_isOwner) {
-      if (status == 'open') {
+      // Owner: open atau full → boleh padam
+      if (status == 'open' || status == 'full') {
         widgets.addAll([
           const SizedBox(height: 12),
           SizedBox(
@@ -1675,7 +1760,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               icon: const Icon(Icons.delete_outline,
                   color: Colors.red, size: 18),
               label: Text(isMalay ? 'Padam Post' : 'Delete Post',
-                  style: const TextStyle(color: Colors.red, fontSize: 13)),
+                  style:
+                      const TextStyle(color: Colors.red, fontSize: 13)),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Colors.red),
                 shape: RoundedRectangleBorder(
@@ -1686,6 +1772,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           ),
         ]);
       } else if (status == 'in_progress') {
+        // Single in_progress — owner confirm complete
         widgets.addAll([
           const SizedBox(height: 12),
           if (_bantuan.helperConfirmed)
@@ -1696,7 +1783,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                 onPressed: _isActionLoading
                     ? null
                     : () => _ownerConfirmComplete(isMalay),
-                icon: const Icon(Icons.task_alt, color: Colors.white),
+                icon:
+                    const Icon(Icons.task_alt, color: Colors.white),
                 label: Text(
                     isMalay
                         ? 'Selesai & Rate Helper'
@@ -1721,7 +1809,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                 decoration: BoxDecoration(
                   color: Colors.orange.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  border:
+                      Border.all(color: Colors.orange.withOpacity(0.3)),
                 ),
                 child: Row(children: [
                   const Icon(Icons.hourglass_top,
@@ -1732,8 +1821,9 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                       isMalay
                           ? 'Menunggu helper mengesahkan selesai...'
                           : 'Waiting for helper to confirm done...',
-                      style:
-                          TextStyle(fontSize: 13, color: Colors.orange.shade700),
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.orange.shade700),
                     ),
                   ),
                 ]),
@@ -1742,13 +1832,15 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed:
-                      _isActionLoading ? null : () => _resetToOpen(isMalay),
+                  onPressed: _isActionLoading
+                      ? null
+                      : () => _resetToOpen(isMalay),
                   icon: const Icon(Icons.refresh,
                       color: Colors.orange, size: 18),
-                  label: Text(isMalay ? 'Tukar Helper' : 'Change Helper',
-                      style:
-                          const TextStyle(color: Colors.orange, fontSize: 13)),
+                  label: Text(
+                      isMalay ? 'Tukar Helper' : 'Change Helper',
+                      style: const TextStyle(
+                          color: Colors.orange, fontSize: 13)),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.orange),
                     shape: RoundedRectangleBorder(
@@ -1761,32 +1853,12 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         ]);
       }
     } else {
-      if (status == 'open' && widget.isLoggedIn) {
-        widgets.addAll([
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton.icon(
-              onPressed:
-                  _isActionLoading ? null : () => _acceptHelp(isMalay),
-              icon: const Icon(Icons.handshake, color: Colors.white),
-              label: Text(isMalay ? 'Saya Nak Bantu' : 'I Want to Help',
-                  style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
-            ),
-          ),
-        ]);
-      } else if (status == 'in_progress' && _isAssignedHelper) {
-        if (!_bantuan.helperConfirmed) {
+      // ── Non-owner ────────────────────────────────────────────────
+
+      if (isOffer && isMultiple) {
+        // Multiple slot offer
+        if (_hasAlreadyJoined) {
+          // Dah join — tunjuk "Saya Dah Selesai" button
           widgets.addAll([
             const SizedBox(height: 12),
             SizedBox(
@@ -1798,7 +1870,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                     : () => _helperConfirmDone(isMalay),
                 icon: const Icon(Icons.check_circle_outline,
                     color: Colors.white),
-                label: Text(isMalay ? 'Saya Dah Bantu' : "I've Helped",
+                label: Text(
+                    isMalay ? 'Saya Dah Selesai' : "I'm Done",
                     style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -1812,32 +1885,165 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               ),
             ),
           ]);
-        } else {
+        } else if (status == 'open' &&
+            _bantuan.hasAvailableSlot &&
+            widget.isLoggedIn) {
+          // Boleh join
+          widgets.addAll([
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: _isActionLoading
+                    ? null
+                    : () => _acceptHelp(isMalay),
+                icon: const Icon(Icons.group_add, color: Colors.white),
+                label: Text(
+                    isMalay
+                        ? 'Daftar Slot Ini'
+                        : 'Join This Slot',
+                    style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ]);
+        } else if (status == 'full') {
+          // Slot penuh
           widgets.addAll([
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.08),
+                color: Colors.purple.withOpacity(0.06),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
+                border:
+                    Border.all(color: Colors.purple.withOpacity(0.3)),
               ),
               child: Row(children: [
-                const Icon(Icons.hourglass_top,
-                    color: Colors.green, size: 20),
+                const Icon(Icons.people_alt,
+                    color: Colors.purple, size: 20),
                 const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    isMalay
-                        ? 'Anda telah sahkan selesai. Menunggu owner menutup post...'
-                        : 'You confirmed done. Waiting for owner to close...',
-                    style: const TextStyle(fontSize: 13, color: Colors.green),
-                  ),
+                Text(
+                  isMalay
+                      ? 'Slot telah penuh. Hubungi poster melalui WhatsApp.'
+                      : 'All slots are full. Contact poster via WhatsApp.',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.purple.shade700),
                 ),
               ]),
             ),
           ]);
+        }
+      } else {
+        // Single offer atau request — flow asal
+        if (status == 'open' && widget.isLoggedIn) {
+          widgets.addAll([
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: _isActionLoading
+                    ? null
+                    : () => _acceptHelp(isMalay),
+                icon: Icon(
+                  isOffer
+                      ? Icons.volunteer_activism
+                      : Icons.handshake,
+                  color: Colors.white,
+                ),
+                label: Text(
+                  isOffer
+                      ? (isMalay
+                          ? 'Saya Berminat'
+                          : "I'm Interested")
+                      : (isMalay
+                          ? 'Saya Nak Bantu'
+                          : 'I Want to Help'),
+                  style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isOffer
+                      ? AppColors.primaryBlue
+                      : Colors.orange,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ]);
+        } else if (status == 'in_progress' && _isAssignedHelper) {
+          if (!_bantuan.helperConfirmed) {
+            widgets.addAll([
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _isActionLoading
+                      ? null
+                      : () => _helperConfirmDone(isMalay),
+                  icon: const Icon(Icons.check_circle_outline,
+                      color: Colors.white),
+                  label: Text(
+                      isMalay ? 'Saya Dah Bantu' : "I've Helped",
+                      style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ]);
+          } else {
+            widgets.addAll([
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: Colors.green.withOpacity(0.3)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.hourglass_top,
+                      color: Colors.green, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      isMalay
+                          ? 'Menunggu owner menutup post...'
+                          : 'Waiting for owner to close...',
+                      style: const TextStyle(
+                          fontSize: 13, color: Colors.green),
+                    ),
+                  ),
+                ]),
+              ),
+            ]);
+          }
         }
       }
     }
@@ -1845,7 +2051,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     return widgets;
   }
 
-  // ─── Helper widgets ───────────────────────────────────────────────────────────
+  // ─── Helper widgets ────────────────────────────────────────────────
 
   Widget _buildCard({required Widget child}) {
     return Container(
@@ -1885,7 +2091,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.image_outlined,
-              size: 60, color: AppColors.primaryBlue.withOpacity(0.3)),
+              size: 60,
+              color: AppColors.primaryBlue.withOpacity(0.3)),
           const SizedBox(height: 8),
           Text('Tiada Gambar',
               style: TextStyle(
@@ -1893,6 +2100,35 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   fontSize: 14)),
         ],
       )),
+    );
+  }
+
+  Widget _buildPinMarker() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: AppColors.primaryBlue,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2.5),
+            boxShadow: [
+              BoxShadow(
+                  color: AppColors.primaryBlue.withOpacity(0.4),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2))
+            ],
+          ),
+          child:
+              const Icon(Icons.location_on, color: Colors.white, size: 20),
+        ),
+        CustomPaint(
+          size: const Size(12, 8),
+          painter: _PinTailPainter(color: AppColors.primaryBlue),
+        ),
+      ],
     );
   }
 
@@ -1910,7 +2146,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
   }
 }
 
-// ─── Full map view screen ─────────────────────────────────────────────────────
+// ─── Full map view screen ──────────────────────────────────────────────────────
 
 class _FullMapViewScreen extends StatelessWidget {
   final double lat;
@@ -1928,372 +2164,218 @@ class _FullMapViewScreen extends StatelessWidget {
   });
 
   Future<void> _openGoogleMaps(BuildContext context) async {
-    final uri =
-        Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lon');
+    final uri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=$lat,$lon');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(isMalay
-              ? 'Tidak dapat membuka Google Maps'
-              : 'Cannot open Google Maps'),
-        ));
-      }
     }
   }
 
   Future<void> _openWaze(BuildContext context) async {
-    final uri = Uri.parse('https://waze.com/ul?ll=$lat,$lon&navigate=yes');
+    final uri =
+        Uri.parse('https://waze.com/ul?ll=$lat,$lon&navigate=yes');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-              isMalay ? 'Tidak dapat membuka Waze' : 'Cannot open Waze'),
-        ));
-      }
     }
-  }
-
-  void _showNavigationSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2)),
-            ),
-            Text(
-              isMalay ? 'Navigate ke Lokasi' : 'Navigate to Location',
-              style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              isMalay ? 'Pilih aplikasi navigasi' : 'Choose navigation app',
-              style: TextStyle(fontSize: 13, color: AppColors.textGrey),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                // Google Maps
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      _openGoogleMaps(context);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4285F4).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: const Color(0xFF4285F4).withOpacity(0.3)),
-                      ),
-                      child: Column(children: [
-                        const Icon(Icons.map,
-                            size: 36, color: Color(0xFF4285F4)),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Google Maps',
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF4285F4)),
-                        ),
-                      ]),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Waze
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      _openWaze(context);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF05C8F7).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: const Color(0xFF05C8F7).withOpacity(0.3)),
-                      ),
-                      child: Column(children: [
-                        const Icon(Icons.navigation,
-                            size: 36, color: Color(0xFF05C8F7)),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Waze',
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF05C8F7)),
-                        ),
-                      ]),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final pinLocation = LatLng(lat, lon);
-
     return Scaffold(
       appBar: AppBar(
         backgroundColor: AppColors.primaryBlue,
         elevation: 0,
-        title: Text(
-          isMalay ? 'Lokasi Tepat' : 'Exact Location',
-          style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        title: Text(isMalay ? 'Lokasi Tepat' : 'Exact Location',
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        // Navigate button dalam AppBar
         actions: [
           TextButton.icon(
-            onPressed: () => _showNavigationSheet(context),
-            icon: const Icon(Icons.navigation, color: Colors.white, size: 18),
-            label: Text(
-              isMalay ? 'Navigate' : 'Navigate',
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w600),
-            ),
+            onPressed: () => _openGoogleMaps(context),
+            icon: const Icon(Icons.navigation,
+                color: Colors.white, size: 18),
+            label: const Text('Navigate',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          // Full interactive map
-          FlutterMap(
-            options: MapOptions(
-              initialCenter: pinLocation,
-              initialZoom: 16,
+      body: Stack(children: [
+        FlutterMap(
+          options: MapOptions(
+              initialCenter: pinLocation, initialZoom: 16),
+          children: [
+            TileLayer(
+              urlTemplate:
+                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.bantunow.app',
             ),
-            children: [
-              TileLayer(
-                urlTemplate:
-                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.bantunow.app',
-              ),
-              MarkerLayer(markers: [
-                Marker(
-                  point: pinLocation,
-                  width: 60,
-                  height: 60,
-                  alignment: Alignment.topCenter,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryBlue,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: [
-                            BoxShadow(
-                                color: AppColors.primaryBlue.withOpacity(0.4),
-                                blurRadius: 10)
-                          ],
-                        ),
-                        child: const Icon(Icons.location_on,
-                            color: Colors.white, size: 22),
+            MarkerLayer(markers: [
+              Marker(
+                point: pinLocation,
+                width: 60,
+                height: 60,
+                alignment: Alignment.topCenter,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBlue,
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: Colors.white, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                              color:
+                                  AppColors.primaryBlue.withOpacity(0.4),
+                              blurRadius: 10)
+                        ],
                       ),
-                      CustomPaint(
-                        size: const Size(14, 9),
-                        painter:
-                            _PinTailPainter(color: AppColors.primaryBlue),
+                      child: const Icon(Icons.location_on,
+                          color: Colors.white, size: 22),
+                    ),
+                    CustomPaint(
+                      size: const Size(14, 9),
+                      painter:
+                          _PinTailPainter(color: AppColors.primaryBlue),
+                    ),
+                  ],
+                ),
+              ),
+            ]),
+          ],
+        ),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(20)),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 12,
+                    offset: Offset(0, -2))
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                Text(title,
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textDark),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+                if (address.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.location_on,
+                          size: 14, color: AppColors.textGrey),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(address,
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textDark,
+                                height: 1.4)),
                       ),
                     ],
                   ),
-                ),
-              ]),
-            ],
-          ),
-
-          // Info + Navigate panel bawah
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 12,
-                      offset: Offset(0, -2))
                 ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 14),
-                      decoration: BoxDecoration(
-                          color: Colors.grey.shade300,
-                          borderRadius: BorderRadius.circular(2)),
-                    ),
-                  ),
-                  Text(title,
-                      style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textDark),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.backgroundBlue,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.gps_fixed,
-                            size: 11, color: AppColors.primaryBlue),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${lat.toStringAsFixed(6)}, ${lon.toStringAsFixed(6)}',
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: AppColors.primaryBlue,
-                              fontFamily: 'monospace'),
+                const SizedBox(height: 14),
+                Row(children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _openGoogleMaps(context),
+                      child: Container(
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 13),
+                        decoration: BoxDecoration(
+                          color:
+                              const Color(0xFF4285F4).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: const Color(0xFF4285F4)
+                                  .withOpacity(0.3)),
                         ),
-                      ],
-                    ),
-                  ),
-                  if (address.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.location_on,
-                            size: 14, color: AppColors.textGrey),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(address,
+                        child: const Column(children: [
+                          Icon(Icons.map,
+                              size: 26, color: Color(0xFF4285F4)),
+                          SizedBox(height: 6),
+                          Text('Google Maps',
                               style: TextStyle(
                                   fontSize: 12,
-                                  color: AppColors.textDark,
-                                  height: 1.4)),
-                        ),
-                      ],
-                    ),
-                  ],
-
-                  const SizedBox(height: 14),
-
-                  // ── Navigate buttons row ────────────────────────────
-                  Row(children: [
-                    // Google Maps
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => _openGoogleMaps(context),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF4285F4).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color:
-                                    const Color(0xFF4285F4).withOpacity(0.3)),
-                          ),
-                          child: Column(children: [
-                            const Icon(Icons.map,
-                                size: 26, color: Color(0xFF4285F4)),
-                            const SizedBox(height: 6),
-                            const Text('Google Maps',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF4285F4))),
-                          ]),
-                        ),
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF4285F4))),
+                        ]),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    // Waze
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => _openWaze(context),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF05C8F7).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color:
-                                    const Color(0xFF05C8F7).withOpacity(0.3)),
-                          ),
-                          child: Column(children: [
-                            const Icon(Icons.navigation,
-                                size: 26, color: Color(0xFF05C8F7)),
-                            const SizedBox(height: 6),
-                            const Text('Waze',
-                                style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF05C8F7))),
-                          ]),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _openWaze(context),
+                      child: Container(
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 13),
+                        decoration: BoxDecoration(
+                          color:
+                              const Color(0xFF05C8F7).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: const Color(0xFF05C8F7)
+                                  .withOpacity(0.3)),
                         ),
+                        child: const Column(children: [
+                          Icon(Icons.navigation,
+                              size: 26, color: Color(0xFF05C8F7)),
+                          SizedBox(height: 6),
+                          Text('Waze',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF05C8F7))),
+                        ]),
                       ),
                     ),
-                  ]),
-                ],
-              ),
+                  ),
+                ]),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 }
 
-// ─── Pin tail painter ─────────────────────────────────────────────────────────
-// FIX: import 'package:latlong2/latlong.dart' hide Path — elak conflict
-// Guna ui.Path() yang explicit dari dart:ui
+// ─── Pin tail painter ──────────────────────────────────────────────────────────
 
 class _PinTailPainter extends CustomPainter {
   final Color color;

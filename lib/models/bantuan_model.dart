@@ -19,15 +19,28 @@ class BantuanModel {
   final double? latitude;
   final double? longitude;
 
-  // ✅ Pin lokasi tepat user (dari map picker)
+  // ── Pin lokasi tepat ──────────────────────────────────────────────
   final double? pinLat;
   final double? pinLon;
-  final String? pinAddress; // Alamat reverse-geocoded (optional)
+  final String? pinAddress;
 
+  // ── Single helper (untuk single offer / request) ──────────────────
   final String? helperUid;
   final String? helperName;
   final bool helperConfirmed;
   final String? posterAvailability;
+
+  // ── Slot system (untuk type == 'offer') ──────────────────────────
+  // offerType     : 'single' = Satu Orang | 'multiple' = Ramai Orang
+  // totalSlots    : hanya relevan bila offerType == 'multiple'
+  // acceptedSlots : berapa ramai yang dah accept (auto-increment)
+  // helperUids    : list uid yang dah join (multiple)
+  // helperNames   : list nama yang dah join (multiple)
+  final String offerType;
+  final int? totalSlots;
+  final int acceptedSlots;
+  final List<String> helperUids;
+  final List<String> helperNames;
 
   BantuanModel({
     required this.id,
@@ -52,7 +65,29 @@ class BantuanModel {
     this.helperName,
     this.helperConfirmed = false,
     this.posterAvailability,
+    this.offerType = 'single',
+    this.totalSlots,
+    this.acceptedSlots = 0,
+    this.helperUids = const [],
+    this.helperNames = const [],
   });
+
+  // ── Getters ───────────────────────────────────────────────────────
+
+  bool get isMultipleSlot => offerType == 'multiple';
+
+  /// Masih ada slot kosong?
+  bool get hasAvailableSlot {
+    if (!isMultipleSlot) return status == 'open';
+    if (totalSlots == null) return true;
+    return acceptedSlots < totalSlots!;
+  }
+
+  /// Berapa slot lagi tinggal
+  int get remainingSlots {
+    if (!isMultipleSlot || totalSlots == null) return 0;
+    return (totalSlots! - acceptedSlots).clamp(0, totalSlots!);
+  }
 
   factory BantuanModel.fromMap(Map<String, dynamic> map, String id) {
     return BantuanModel(
@@ -80,6 +115,11 @@ class BantuanModel {
       helperName: map['helper_name'],
       helperConfirmed: map['helper_confirmed'] ?? false,
       posterAvailability: map['poster_availability'],
+      offerType: map['offer_type'] ?? 'single',
+      totalSlots: (map['total_slots'] as num?)?.toInt(),
+      acceptedSlots: (map['accepted_slots'] as num?)?.toInt() ?? 0,
+      helperUids: List<String>.from(map['helper_uids'] ?? []),
+      helperNames: List<String>.from(map['helper_names'] ?? []),
     );
   }
 
@@ -104,27 +144,95 @@ class BantuanModel {
       if (helperUid != null) 'helper_uid': helperUid,
       if (helperName != null) 'helper_name': helperName,
       'helper_confirmed': helperConfirmed,
-      if (posterAvailability != null) 'poster_availability': posterAvailability,
+      if (posterAvailability != null)
+        'poster_availability': posterAvailability,
+      'offer_type': offerType,
+      if (totalSlots != null) 'total_slots': totalSlots,
+      'accepted_slots': acceptedSlots,
+      'helper_uids': helperUids,
+      'helper_names': helperNames,
     };
   }
 }
 
+// ─── Categories ────────────────────────────────────────────────────────────────
+
 class BantuanCategories {
+  // defaultOfferType:
+  //   'multiple' → auto-set slot bila user pilih kategori ni (Offer)
+  //   'single'   → auto-set satu orang bila user pilih kategori ni (Offer)
+
   static const List<Map<String, String>> categories = [
-    {'id': 'makanan', 'name': 'Makanan / Food', 'icon': '🍱'},
-    {'id': 'transport', 'name': 'Transport / Ride', 'icon': '🚗'},
-    {'id': 'perubatan', 'name': 'Perubatan / Medical', 'icon': '🏥'},
-    {'id': 'pendidikan', 'name': 'Pendidikan / Education', 'icon': '📚'},
-    {'id': 'kewangan', 'name': 'Kewangan / Financial', 'icon': '💰'},
-    {'id': 'rumah', 'name': 'Rumah / Housing', 'icon': '🏠'},
-    {'id': 'kerja', 'name': 'Kerja / Employment', 'icon': '💼'},
-    {'id': 'lain', 'name': 'Lain-lain / Others', 'icon': '🤝'},
+    {
+      'id': 'makanan',
+      'name': 'Makanan & Minuman / Food',
+      'icon': '🍱',
+      'defaultOfferType': 'single',
+    },
+    {
+      'id': 'transport',
+      'name': 'Transport / Ride',
+      'icon': '🚗',
+      'defaultOfferType': 'single',
+    },
+    {
+      'id': 'perubatan',
+      'name': 'Perubatan / Medical',
+      'icon': '🏥',
+      'defaultOfferType': 'single',
+    },
+    {
+      'id': 'repair',
+      'name': 'Repair / Baiki',
+      'icon': '🔧',
+      'defaultOfferType': 'single',
+    },
+    {
+      'id': 'angkat_barang',
+      'name': 'Angkat Barang / Moving',
+      'icon': '📦',
+      'defaultOfferType': 'single',
+    },
+    {
+      'id': 'pendidikan',
+      'name': 'Pendidikan / Education',
+      'icon': '📚',
+      'defaultOfferType': 'multiple',
+    },
+    {
+      'id': 'kerja',
+      'name': 'Kerja / Employment',
+      'icon': '💼',
+      'defaultOfferType': 'multiple',
+    },
+    {
+      'id': 'kewangan',
+      'name': 'Kewangan / Financial',
+      'icon': '💰',
+      'defaultOfferType': 'single',
+    },
+    {
+      'id': 'kecemasan',
+      'name': 'Kecemasan / Emergency',
+      'icon': '🚨',
+      'defaultOfferType': 'single',
+    },
+    {
+      'id': 'lain',
+      'name': 'Lain-lain / Others',
+      'icon': '🤝',
+      'defaultOfferType': 'single',
+    },
   ];
 
   static String getCategoryName(String id) {
     final cat = categories.firstWhere(
       (c) => c['id'] == id,
-      orElse: () => {'name': 'Lain-lain / Others', 'icon': '🤝'},
+      orElse: () => {
+        'name': 'Lain-lain / Others',
+        'icon': '🤝',
+        'defaultOfferType': 'single'
+      },
     );
     return cat['name']!;
   }
@@ -132,8 +240,24 @@ class BantuanCategories {
   static String getCategoryIcon(String id) {
     final cat = categories.firstWhere(
       (c) => c['id'] == id,
-      orElse: () => {'name': 'Lain-lain / Others', 'icon': '🤝'},
+      orElse: () => {
+        'name': 'Lain-lain / Others',
+        'icon': '🤝',
+        'defaultOfferType': 'single'
+      },
     );
     return cat['icon']!;
+  }
+
+  static String getDefaultOfferType(String id) {
+    final cat = categories.firstWhere(
+      (c) => c['id'] == id,
+      orElse: () => {
+        'name': 'Lain-lain / Others',
+        'icon': '🤝',
+        'defaultOfferType': 'single'
+      },
+    );
+    return cat['defaultOfferType'] ?? 'single';
   }
 }
