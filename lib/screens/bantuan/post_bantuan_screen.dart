@@ -51,6 +51,7 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
   // ── Slot system ────────────────────────────────────────────────────
   // 'single' = Satu Orang | 'multiple' = Ramai Orang (Ada Slot)
   String _offerType = 'single';
+  String _selectedCompletionType = 'individual';
   // Track sama ada user dah manually override atau masih ikut auto-set
   bool _userOverrideOfferType = false;
 
@@ -124,6 +125,7 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
       // Hanya auto-set kalau user belum manually override
       if (!_userOverrideOfferType) {
         _offerType = BantuanCategories.getDefaultOfferType(newCat);
+        _selectedCompletionType = BantuanCategories.getDefaultCompletionType(newCat); // ← TAMBAH INI
         // Reset slots ke default 10 bila auto-set ke multiple
         if (_offerType == 'multiple') {
           _slotsController.text = '10';
@@ -431,6 +433,7 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
         pinAddress: _pinAddress.isNotEmpty ? _pinAddress : null,
         posterAvailability: posterAvailability,
         offerType: finalOfferType,
+        completionType: _selectedCompletionType,
         totalSlots: finalTotalSlots,
         acceptedSlots: 0,
       );

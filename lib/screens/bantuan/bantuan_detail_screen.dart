@@ -66,6 +66,14 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     return false;
   }
 
+  // Semak kalau current user (multiple) dah confirm selesai
+  bool get _currentHelperConfirmed {
+    if (_currentUid == null) return false;
+    return _bantuan.helperConfirmations[_currentUid] == true;
+  }
+  /// true kalau post ni guna completionType 'group'
+  bool get _isGroupCompletion => _bantuan.completionType == 'group';
+
   @override
   void initState() {
     super.initState();
@@ -501,9 +509,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         title: Text(
           isOffer
               ? (isMultiple
-                  ? (isMalay
-                      ? 'Daftar Slot Ini?'
-                      : 'Join This Slot?')
+                  ? (isMalay ? 'Daftar Slot Ini?' : 'Join This Slot?')
                   : (isMalay
                       ? 'Berminat dengan Tawaran Ini?'
                       : 'Interested in This Offer?'))
@@ -538,9 +544,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               isOffer
                   ? (isMultiple
                       ? (isMalay ? 'Ya, Daftar' : 'Yes, Join')
-                      : (isMalay
-                          ? 'Ya, Saya Berminat'
-                          : "Yes, I'm Interested"))
+                      : (isMalay ? 'Ya, Saya Berminat' : "Yes, I'm Interested"))
                   : (isMalay ? 'Ya, Saya Bantu' : "Yes, I'll Help"),
               style: const TextStyle(color: Colors.white),
             ),
@@ -554,13 +558,14 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
     try {
       // ── MULTIPLE SLOT LOGIC ──────────────────────────────────────
-      if (isOffer && isMultiple) {
+        if (isMultiple) {
         final result = await _bantuanService.acceptMultipleSlot(
           postId: _bantuan.id,
           helperUid: user.uid,
           helperName: helperName,
           currentAccepted: _bantuan.acceptedSlots,
           totalSlots: _bantuan.totalSlots ?? 0,
+          completionType: _bantuan.completionType,
         );
 
         if (result['success'] == true) {
@@ -582,7 +587,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
             ));
           }
         } else {
-          // Handle error cases
           final msg = result['message'] as String? ?? '';
           if (mounted) {
             String errorText;
@@ -671,7 +675,11 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
     setState(() => _isActionLoading = true);
     try {
-      final result = await _bantuanService.helperConfirm(_bantuan.id);
+      final result = await _bantuanService.helperConfirm(
+        _bantuan.id,
+        helperUid: _currentUid,
+        isMultiple: _bantuan.isMultipleSlot,
+      );
       if (result['success'] != true) throw result['message'];
       await _refreshBantuan();
     } catch (e) {
@@ -685,17 +693,20 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
     if (!mounted) return;
 
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => RatingDialog(
-        bantuanId: _bantuan.id,
-        ratedUserUid: _bantuan.postedByUid,
-        ratedUserName: _bantuan.postedBy,
-        type: 'poster',
-        isMalay: isMalay,
-      ),
-    );
+    // Rating untuk single — untuk multiple, rating dilakukan bila owner tutup post
+    if (!_bantuan.isMultipleSlot) {
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => RatingDialog(
+          bantuanId: _bantuan.id,
+          ratedUserUid: _bantuan.postedByUid,
+          ratedUserName: _bantuan.postedBy,
+          type: 'poster',
+          isMalay: isMalay,
+        ),
+      );
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -772,6 +783,70 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         backgroundColor: Colors.green,
       ));
       Navigator.pop(context);
+    }
+  }
+
+  // ─── OWNER TUTUP POST (multiple) ──────────────────────────────────
+  // Owner boleh tutup bila-bila masa — tak perlu tunggu semua confirm
+
+  Future<void> _ownerCloseMultiplePost(bool isMalay) async {
+    final allDone = _bantuan.allHelpersConfirmed;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isMalay ? 'Tutup Post?' : 'Close Post?'),
+        content: Text(
+          allDone
+              ? (isMalay
+                  ? 'Semua helper telah sahkan selesai. Tutup post ini?'
+                  : 'All helpers confirmed done. Close this post?')
+              : (isMalay
+                  ? 'Belum semua helper confirm selesai. Tutup post ini lebih awal?'
+                  : 'Not all helpers confirmed yet. Close this post early?'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(isMalay ? 'Batal' : 'Cancel',
+                  style: TextStyle(color: AppColors.textGrey))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: allDone ? Colors.green : Colors.orange),
+            child: Text(isMalay ? 'Ya, Tutup' : 'Yes, Close',
+                style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _isActionLoading = true);
+    try {
+      final result = await _bantuanService.closeBantuan(_bantuan.id);
+      if (result['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(isMalay
+                ? '✅ Post berjaya ditutup!'
+                : '✅ Post closed successfully!'),
+            backgroundColor: Colors.green,
+          ));
+          Navigator.pop(context);
+        }
+      } else {
+        throw result['message'];
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
     }
   }
 
@@ -870,6 +945,146 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               : '🔄 Post reopened.'),
           backgroundColor: Colors.orange,
         ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
+    }
+  }
+
+  // ─── OWNER CANCEL / REJECT HELPER ─────────────────────────────────
+
+  Future<void> _ownerCancelHelper(
+      bool isMalay, String helperUid, String helperName) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isMalay ? 'Tolak Helper Ini?' : 'Reject This Helper?'),
+        content: Text(isMalay
+            ? '"$helperName" akan dibuang dan post dibuka semula untuk helper lain.'
+            : '"$helperName" will be removed and the post reopened for others.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(isMalay ? 'Batal' : 'Cancel',
+                  style: TextStyle(color: AppColors.textGrey))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(isMalay ? 'Ya, Tolak' : 'Yes, Reject',
+                style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _isActionLoading = true);
+    try {
+      final result = await _bantuanService.ownerCancelHelper(
+        postId: _bantuan.id,
+        helperUid: helperUid,
+        helperName: helperName,
+        isMultiple: _bantuan.isMultipleSlot,
+        isIndividual: !_isGroupCompletion,
+      );
+      if (result['success'] == true) {
+        await _refreshBantuan();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(isMalay
+                ? '🔄 Helper dibuang. Post aktif semula.'
+                : '🔄 Helper removed. Post is active again.'),
+            backgroundColor: Colors.orange,
+          ));
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error: ${result['message']}')));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isActionLoading = false);
+    }
+  }
+
+  // ─── HELPER WITHDRAW ──────────────────────────────────────────────
+
+  Future<void> _helperWithdraw(bool isMalay) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(isMalay ? 'Tarik Diri?' : 'Withdraw?'),
+        content: Text(isMalay
+            ? 'Anda akan dikeluarkan dari post ini. Post akan aktif semula untuk orang lain.'
+            : 'You will be removed from this post. It will be reopened for others.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(isMalay ? 'Batal' : 'Cancel',
+                  style: TextStyle(color: AppColors.textGrey))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text(isMalay ? 'Ya, Tarik Diri' : 'Yes, Withdraw',
+                style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _isActionLoading = true);
+    try {
+      final helperUid = _currentUid!;
+
+      String helperName = '';
+      if (_bantuan.isMultipleSlot) {
+        final idx = _bantuan.helperUids.indexOf(helperUid);
+        if (idx != -1 && idx < _bantuan.helperNames.length) {
+          helperName = _bantuan.helperNames[idx];
+        }
+      } else {
+        helperName = _bantuan.helperName ?? '';
+      }
+
+      final result = await _bantuanService.helperWithdraw(
+        postId: _bantuan.id,
+        helperUid: helperUid,
+        helperName: helperName,
+        isMultiple: _bantuan.isMultipleSlot,
+        isIndividual: !_isGroupCompletion,
+      );
+
+      if (result['success'] == true) {
+        await _refreshBantuan();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(isMalay
+                ? '↩️ Anda telah tarik diri.'
+                : '↩️ You have withdrawn.'),
+            backgroundColor: Colors.grey.shade700,
+          ));
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error: ${result['message']}')));
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -1066,7 +1281,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   ]),
 
                   // ── SLOT PROGRESS BANNER (multiple offer) ──────────
-                  if (bantuan.type == 'offer' && bantuan.isMultipleSlot) ...[
+                    if (bantuan.isMultipleSlot) ...[
                     const SizedBox(height: 16),
                     _buildSlotProgressBanner(bantuan, isMalay),
                   ],
@@ -1634,7 +1849,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     final remaining = bantuan.remainingSlots;
     final isFull = bantuan.status == 'full';
     final progress = total > 0 ? accepted / total : 0.0;
-
     final color = isFull ? Colors.purple : Colors.teal;
 
     return Container(
@@ -1651,15 +1865,12 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           Row(children: [
             Icon(Icons.people_alt_outlined, size: 18, color: color),
             const SizedBox(width: 8),
-            Text(
-              isMalay ? 'Slot Tawaran' : 'Offer Slots',
+              Text(
+              isMalay ? 'Slot Bantuan' : 'Help Slots',
               style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: color),
+                  fontSize: 13, fontWeight: FontWeight.w600, color: color),
             ),
             const Spacer(),
-            // Badge: X/Y slot
             Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1677,9 +1888,30 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
             ),
           ]),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _isGroupCompletion
+                  ? Colors.indigo.withOpacity(0.08)
+                  : Colors.cyan.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              _isGroupCompletion
+                  ? (isMalay ? '👥 Serentak (datang sama-sama)' : '👥 Group (attend together)')
+                  : (isMalay ? '👤 Satu-satu (berasingan)' : '👤 Individual (separately)'),
+              style: TextStyle(
+                fontSize: 11,
+                color: _isGroupCompletion
+                    ? Colors.indigo.shade600
+                    : Colors.cyan.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
 
-          // Progress bar
+          const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
             child: LinearProgressIndicator(
@@ -1689,10 +1921,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ),
-
           const SizedBox(height: 10),
-
-          // Status text
           Text(
             isFull
                 ? (isMalay
@@ -1704,10 +1933,9 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
             style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: isFull ? Colors.red.shade700 : Colors.teal.shade700),
+                color:
+                    isFull ? Colors.red.shade700 : Colors.teal.shade700),
           ),
-
-          // Kalau user dah join — tunjuk badge
           if (_hasAlreadyJoined) ...[
             const SizedBox(height: 10),
             Container(
@@ -1719,8 +1947,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                 border: Border.all(color: Colors.green.withOpacity(0.3)),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.check_circle,
-                    size: 14, color: Colors.green),
+                const Icon(Icons.check_circle, size: 14, color: Colors.green),
                 const SizedBox(width: 6),
                 Text(
                   isMalay
@@ -1739,6 +1966,219 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     );
   }
 
+  // ─── HELPER LIST CARD (owner, multiple slot) ──────────────────────
+  // Tunjuk senarai helpers + status confirm setiap satu (✅/⏳) + butang reject
+  // + butang "Tutup Post" di bawah
+
+  Widget _buildHelperListCard(bool isMalay) {
+    final confirmed = _bantuan.confirmedCount;
+    final total = _bantuan.helperUids.length;
+    final allDone = _isGroupCompletion ? true : _bantuan.allHelpersConfirmed;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.purple.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.purple.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header: title + progress count ──────────────────────
+          Row(children: [
+            Icon(Icons.people_alt_outlined,
+                size: 16, color: Colors.purple.shade700),
+            const SizedBox(width: 6),
+            Text(
+              isMalay ? 'Senarai Helper' : 'Helper List',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.purple.shade700),
+            ),
+            const Spacer(),
+            // Badge: berapa dah confirm
+          if (!_isGroupCompletion)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: allDone
+                      ? Colors.green.withOpacity(0.15)
+                      : Colors.orange.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$confirmed/$total ✅',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: allDone
+                          ? Colors.green.shade700
+                          : Colors.orange.shade700),
+                ),
+              )
+            else
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$total 👥',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo.shade600),
+                ),
+              ),
+          ]),
+
+          const SizedBox(height: 12),
+
+          // ── Senarai helper dengan status confirm ─────────────────
+          ..._bantuan.helperUids.asMap().entries.map((entry) {
+            final index = entry.key;
+            final uid = entry.value;
+            final name = index < _bantuan.helperNames.length
+                ? _bantuan.helperNames[index]
+                : 'Helper ${index + 1}';
+            final hasConfirmed =
+                _bantuan.helperConfirmations[uid] == true;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(children: [
+                // Avatar
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: hasConfirmed
+                      ? Colors.green.withOpacity(0.12)
+                      : Colors.purple.withOpacity(0.1),
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : 'H',
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: hasConfirmed
+                            ? Colors.green.shade700
+                            : Colors.purple.shade700),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Nama
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          style: TextStyle(
+                              fontSize: 14, color: AppColors.textDark)),
+                      const SizedBox(height: 2),
+                      // Status badge ✅/⏳
+                      if (!_isGroupCompletion)
+                        Row(mainAxisSize: MainAxisSize.min, children: [
+                          Text(
+                            hasConfirmed ? '✅' : '⏳',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            hasConfirmed
+                                ? (isMalay ? 'Selesai' : 'Done')
+                                : (isMalay ? 'Belum selesai' : 'Pending'),
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: hasConfirmed
+                                    ? Colors.green.shade600
+                                    : Colors.orange.shade600),
+                          ),
+                        ])
+                      else
+                        Text(
+                          isMalay ? '👥 Hadir serentak' : '👥 Group attendee',
+                          style: TextStyle(
+                              fontSize: 11, color: Colors.indigo.shade400),
+                        ),
+                    ],
+                  ),
+                ),
+                // Butang reject
+                GestureDetector(
+                  onTap: _isActionLoading
+                      ? null
+                      : () => _ownerCancelHelper(isMalay, uid, name),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border:
+                          Border.all(color: Colors.red.withOpacity(0.3)),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.person_remove_outlined,
+                          size: 14, color: Colors.red),
+                      const SizedBox(width: 4),
+                      Text(
+                        isMalay ? 'Tolak' : 'Reject',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.red,
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ]),
+                  ),
+                ),
+              ]),
+            );
+          }),
+
+          const Divider(height: 20),
+
+          // ── Butang Tutup Post ─────────────────────────────────────
+          // Hijau terang bila semua confirm, orange bila belum semua
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isActionLoading
+                  ? null
+                  : () => _ownerCloseMultiplePost(isMalay),
+              icon: Icon(
+                allDone ? Icons.task_alt : Icons.lock_outline,
+                color: Colors.white,
+                size: 18,
+              ),
+              label: Text(
+                _isGroupCompletion
+                    ? (isMalay ? '🎉 Semua Hadir — Tutup Post' : '🎉 All Attended — Close Post')
+                    : (allDone
+                        ? (isMalay ? '🎉 Tutup Post — Semua Selesai!' : '🎉 Close Post — All Done!')
+                        : (isMalay ? 'Tutup Post' : 'Close Post')),
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: allDone ? Colors.green : Colors.orange,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ─── ACTION BUTTONS ────────────────────────────────────────────────
 
   List<Widget> _buildActionButtons(bool isMalay) {
@@ -1748,34 +2188,46 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     final widgets = <Widget>[];
 
     if (_isOwner) {
-      // Owner: open atau full → boleh padam
+      // ── OWNER ──────────────────────────────────────────────────────
+
       if (status == 'open' || status == 'full') {
-        widgets.addAll([
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed:
-                  _isActionLoading ? null : () => _deletePost(isMalay),
-              icon: const Icon(Icons.delete_outline,
-                  color: Colors.red, size: 18),
-              label: Text(isMalay ? 'Padam Post' : 'Delete Post',
-                  style:
-                      const TextStyle(color: Colors.red, fontSize: 13)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.red),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
+        // Multiple: tunjuk helper list dengan status confirm + butang tutup post
+        if (isMultiple && _bantuan.helperUids.isNotEmpty) {
+          widgets.addAll([
+            const SizedBox(height: 16),
+            _buildHelperListCard(isMalay),
+          ]);
+        } else {
+          // Tiada helper lagi — tunjuk delete je
+          widgets.addAll([
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed:
+                    _isActionLoading ? null : () => _deletePost(isMalay),
+                icon: const Icon(Icons.delete_outline,
+                    color: Colors.red, size: 18),
+                label: Text(isMalay ? 'Padam Post' : 'Delete Post',
+                    style:
+                        const TextStyle(color: Colors.red, fontSize: 13)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
               ),
             ),
-          ),
-        ]);
+          ]);
+        }
       } else if (status == 'in_progress') {
-        // Single in_progress — owner confirm complete
-        widgets.addAll([
-          const SizedBox(height: 12),
-          if (_bantuan.helperConfirmed)
+        // Single in_progress
+        widgets.add(const SizedBox(height: 12));
+
+        if (_bantuan.helperConfirmed) {
+          // Helper dah confirm — owner boleh complete
+          widgets.add(
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -1783,8 +2235,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                 onPressed: _isActionLoading
                     ? null
                     : () => _ownerConfirmComplete(isMalay),
-                icon:
-                    const Icon(Icons.task_alt, color: Colors.white),
+                icon: const Icon(Icons.task_alt, color: Colors.white),
                 label: Text(
                     isMalay
                         ? 'Selesai & Rate Helper'
@@ -1800,47 +2251,49 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   elevation: 0,
                 ),
               ),
-            )
-          else
-            Column(children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: Colors.orange.withOpacity(0.3)),
-                ),
-                child: Row(children: [
-                  const Icon(Icons.hourglass_top,
-                      color: Colors.orange, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      isMalay
-                          ? 'Menunggu helper mengesahkan selesai...'
-                          : 'Waiting for helper to confirm done...',
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.orange.shade700),
-                    ),
-                  ),
-                ]),
+            ),
+          );
+        } else {
+          // Tunggu helper confirm
+          widgets.addAll([
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border:
+                    Border.all(color: Colors.orange.withOpacity(0.3)),
               ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
+              child: Row(children: [
+                const Icon(Icons.hourglass_top,
+                    color: Colors.orange, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    isMalay
+                        ? 'Menunggu helper mengesahkan selesai...'
+                        : 'Waiting for helper to confirm done...',
+                    style: TextStyle(
+                        fontSize: 13, color: Colors.orange.shade700),
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 10),
+            // Tukar Helper + Tolak Helper side by side
+            Row(children: [
+              Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _isActionLoading
                       ? null
                       : () => _resetToOpen(isMalay),
                   icon: const Icon(Icons.refresh,
-                      color: Colors.orange, size: 18),
+                      color: Colors.orange, size: 16),
                   label: Text(
                       isMalay ? 'Tukar Helper' : 'Change Helper',
                       style: const TextStyle(
-                          color: Colors.orange, fontSize: 13)),
+                          color: Colors.orange, fontSize: 12)),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.orange),
                     shape: RoundedRectangleBorder(
@@ -1849,43 +2302,145 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   ),
                 ),
               ),
-            ]),
-        ]);
-      }
-    } else {
-      // ── Non-owner ────────────────────────────────────────────────
-
-      if (isOffer && isMultiple) {
-        // Multiple slot offer
-        if (_hasAlreadyJoined) {
-          // Dah join — tunjuk "Saya Dah Selesai" button
-          widgets.addAll([
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                onPressed: _isActionLoading
-                    ? null
-                    : () => _helperConfirmDone(isMalay),
-                icon: const Icon(Icons.check_circle_outline,
-                    color: Colors.white),
-                label: Text(
-                    isMalay ? 'Saya Dah Selesai' : "I'm Done",
-                    style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isActionLoading
+                      ? null
+                      : () => _ownerCancelHelper(
+                            isMalay,
+                            _bantuan.helperUid ?? '',
+                            _bantuan.helperName ?? '',
+                          ),
+                  icon: const Icon(Icons.person_remove_outlined,
+                      color: Colors.red, size: 16),
+                  label: Text(
+                      isMalay ? 'Tolak Helper' : 'Reject Helper',
+                      style: const TextStyle(
+                          color: Colors.red, fontSize: 12)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
                 ),
               ),
-            ),
+            ]),
           ]);
-        } else if (status == 'open' &&
+        }
+      }
+    } else {
+      // ── NON-OWNER ──────────────────────────────────────────────────
+
+        if (isMultiple) {
+        // ── Multiple slot (offer & request) ──
+            if (_hasAlreadyJoined) {
+            if (_isGroupCompletion) {
+              // Group: info banner + tarik diri je
+              widgets.addAll([
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.indigo.withOpacity(0.25)),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.groups_outlined, color: Colors.indigo, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isMalay ? '👥 Anda terdaftar — mod serentak' : '👥 You\'re registered — group mode',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.indigo),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            isMalay
+                                ? 'Hadir bersama peserta lain. Owner akan tutup post selepas semua selesai.'
+                                : 'Attend together with other participants. Owner will close the post when all done.',
+                            style: TextStyle(fontSize: 11, color: Colors.indigo.shade400, height: 1.4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _isActionLoading ? null : () => _helperWithdraw(isMalay),
+                    icon: const Icon(Icons.exit_to_app, color: Colors.red, size: 18),
+                    label: Text(
+                      isMalay ? 'Tarik Diri dari Slot' : 'Withdraw from Slot',
+                      style: const TextStyle(color: Colors.red, fontSize: 13),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.red),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ]);
+          } else {
+            // Belum confirm — tunjuk "Saya Dah Selesai" + "Tarik Diri"
+            widgets.addAll([
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _isActionLoading
+                      ? null
+                      : () => _helperConfirmDone(isMalay),
+                  icon: const Icon(Icons.check_circle_outline,
+                      color: Colors.white),
+                  label: Text(
+                      isMalay ? 'Saya Dah Selesai' : "I'm Done",
+                      style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _isActionLoading
+                      ? null
+                      : () => _helperWithdraw(isMalay),
+                  icon: const Icon(Icons.exit_to_app,
+                      color: Colors.red, size: 18),
+                  label: Text(
+                      isMalay
+                          ? 'Tarik Diri dari Slot'
+                          : 'Withdraw from Slot',
+                      style:
+                          const TextStyle(color: Colors.red, fontSize: 13)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ]);
+          }
+          } else if (status == 'open' &&
             _bantuan.hasAvailableSlot &&
             widget.isLoggedIn) {
           // Boleh join
@@ -1895,20 +2450,21 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton.icon(
-                onPressed: _isActionLoading
-                    ? null
-                    : () => _acceptHelp(isMalay),
-                icon: const Icon(Icons.group_add, color: Colors.white),
+                onPressed:
+                    _isActionLoading ? null : () => _acceptHelp(isMalay),
+                icon: Icon(
+                    isOffer ? Icons.group_add : Icons.volunteer_activism,
+                    color: Colors.white),
                 label: Text(
                     isMalay
-                        ? 'Daftar Slot Ini'
-                        : 'Join This Slot',
+                        ? (isOffer ? 'Daftar Slot Ini' : 'Saya Nak Bantu')
+                        : (isOffer ? 'Join This Slot' : 'I Want to Help'),
                     style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: Colors.white)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.purple,
+                  backgroundColor: isOffer ? Colors.purple : Colors.teal,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
@@ -1917,7 +2473,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
             ),
           ]);
         } else if (status == 'full') {
-          // Slot penuh
           widgets.addAll([
             const SizedBox(height: 12),
             Container(
@@ -1933,20 +2488,21 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                 const Icon(Icons.people_alt,
                     color: Colors.purple, size: 20),
                 const SizedBox(width: 10),
-                Text(
-                  isMalay
-                      ? 'Slot telah penuh. Hubungi poster melalui WhatsApp.'
-                      : 'All slots are full. Contact poster via WhatsApp.',
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.purple.shade700),
+                Expanded(
+                  child: Text(
+                    isMalay
+                        ? 'Slot telah penuh. Hubungi poster melalui WhatsApp.'
+                        : 'All slots are full. Contact poster via WhatsApp.',
+                    style: TextStyle(
+                        fontSize: 13, color: Colors.purple.shade700),
+                  ),
                 ),
               ]),
             ),
           ]);
         }
       } else {
-        // Single offer atau request — flow asal
+        // ── Single offer atau request ────────────────────────────
         if (status == 'open' && widget.isLoggedIn) {
           widgets.addAll([
             const SizedBox(height: 12),
@@ -1954,32 +2510,24 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton.icon(
-                onPressed: _isActionLoading
-                    ? null
-                    : () => _acceptHelp(isMalay),
+                onPressed:
+                    _isActionLoading ? null : () => _acceptHelp(isMalay),
                 icon: Icon(
-                  isOffer
-                      ? Icons.volunteer_activism
-                      : Icons.handshake,
+                  isOffer ? Icons.volunteer_activism : Icons.handshake,
                   color: Colors.white,
                 ),
                 label: Text(
                   isOffer
-                      ? (isMalay
-                          ? 'Saya Berminat'
-                          : "I'm Interested")
-                      : (isMalay
-                          ? 'Saya Nak Bantu'
-                          : 'I Want to Help'),
+                      ? (isMalay ? 'Saya Berminat' : "I'm Interested")
+                      : (isMalay ? 'Saya Nak Bantu' : 'I Want to Help'),
                   style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
                       color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isOffer
-                      ? AppColors.primaryBlue
-                      : Colors.orange,
+                  backgroundColor:
+                      isOffer ? AppColors.primaryBlue : Colors.orange,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
@@ -2011,6 +2559,26 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _isActionLoading
+                      ? null
+                      : () => _helperWithdraw(isMalay),
+                  icon: const Icon(Icons.exit_to_app,
+                      color: Colors.red, size: 18),
+                  label: Text(isMalay ? 'Tarik Diri' : 'Withdraw',
+                      style: const TextStyle(
+                          color: Colors.red, fontSize: 13)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),

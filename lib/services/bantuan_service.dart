@@ -64,7 +64,7 @@ class BantuanService {
     String? category,
   }) {
     // Tunjuk open, in_progress, DAN full dalam feed
-    // 'full' = multiple slot offer yang dah penuh tapi masih relevan
+    // 'full' = multiple slot yang dah penuh tapi masih relevan
     final Query query = _firestore
         .collection(_collection)
         .where('status', whereIn: ['open', 'in_progress', 'full'])
@@ -140,15 +140,16 @@ class BantuanService {
 
   // ─── ACCEPT HELP ───────────────────────────────────────────────────
   //
-  // SINGLE offer / REQUEST:
-  //   → status = 'in_progress', helper_uid, helper_name
+  // SINGLE (offer atau request):
+  //   → status = 'in_progress', set helper_uid, helper_name
   //
-  // MULTIPLE offer:
+  // MULTIPLE (offer atau request):
   //   → accepted_slots + 1
   //   → helper_uids[] tambah uid
   //   → helper_names[] tambah name
+  //   → init helper_confirmations[uid] = false (untuk individual)
   //   → status KEKAL 'open' selagi slot ada
-  //   → bila accepted_slots == total_slots → status = 'full'
+  //   → bila penuh → status = 'full'
 
   Future<Map<String, dynamic>> acceptSingleHelp({
     required String postId,
@@ -174,6 +175,7 @@ class BantuanService {
     required String helperName,
     required int currentAccepted,
     required int totalSlots,
+    required String completionType,
   }) async {
     try {
       // Semak dulu — double-accept prevention
@@ -188,10 +190,7 @@ class BantuanService {
           List<String>.from(data['helper_uids'] ?? []);
 
       if (existingUids.contains(helperUid)) {
-        return {
-          'success': false,
-          'message': 'already_joined',
-        };
+        return {'success': false, 'message': 'already_joined'};
       }
 
       final latestAccepted =
@@ -204,13 +203,23 @@ class BantuanService {
       final newAccepted = latestAccepted + 1;
       final isFull = newAccepted >= totalSlots;
 
-      await _firestore.collection(_collection).doc(postId).update({
+      final updateData = <String, dynamic>{
         'accepted_slots': newAccepted,
         'helper_uids': FieldValue.arrayUnion([helperUid]),
         'helper_names': FieldValue.arrayUnion([helperName]),
-        // Kalau penuh → tukar status ke 'full', kalau tidak kekal 'open'
         'status': isFull ? 'full' : 'open',
-      });
+      };
+
+      // Init confirmation entry hanya untuk individual
+      // Group tak perlu — owner terus close
+      if (completionType == 'individual') {
+        updateData['helper_confirmations.$helperUid'] = false;
+      }
+
+      await _firestore
+          .collection(_collection)
+          .doc(postId)
+          .update(updateData);
 
       return {
         'success': true,
@@ -223,20 +232,45 @@ class BantuanService {
   }
 
   // ─── HELPER CONFIRM ────────────────────────────────────────────────
-  // Untuk SINGLE: sama seperti dulu
-  // Untuk MULTIPLE: simpan timestamp confirm individual (guna subcollection kalau perlu, buat simple dulu)
+  //
+  // SINGLE:
+  //   → update boolean helper_confirmed = true
+  //
+  // MULTIPLE + INDIVIDUAL:
+  //   → update helper_confirmations.<uid> = true (dot notation)
+  //
+  // MULTIPLE + GROUP:
+  //   → helpers tak perlu confirm, owner terus close
+  //   → function ini tak patut dipanggil untuk group
+  //   → tapi kalau dipanggil jugak, treat sama macam individual
 
-  Future<Map<String, dynamic>> helperConfirm(String id) async {
+  Future<Map<String, dynamic>> helperConfirm(
+    String id, {
+    String? helperUid,
+    bool isMultiple = false,
+  }) async {
     try {
-      await _firestore.collection(_collection).doc(id).update({
-        'helper_confirmed': true,
-        'helper_confirmed_at': FieldValue.serverTimestamp(),
-      });
+      if (isMultiple && helperUid != null) {
+        // Per-helper confirmation menggunakan dot notation
+        await _firestore.collection(_collection).doc(id).update({
+          'helper_confirmations.$helperUid': true,
+          'helper_confirmed_at': FieldValue.serverTimestamp(),
+        });
+      } else {
+        // Single — kekal sama
+        await _firestore.collection(_collection).doc(id).update({
+          'helper_confirmed': true,
+          'helper_confirmed_at': FieldValue.serverTimestamp(),
+        });
+      }
       return {'success': true};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }
   }
+
+  // ─── CLOSE BANTUAN ────────────────────────────────────────────────
+  // Owner tutup post — untuk multiple (sama ada individual atau group)
 
   Future<Map<String, dynamic>> closeBantuan(String id) async {
     try {
@@ -248,5 +282,94 @@ class BantuanService {
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }
+  }
+
+  // ─── OWNER CANCEL / REJECT HELPER ─────────────────────────────────
+  //
+  // Owner boleh reject/cancel helper yang ada.
+  //
+  // SINGLE:
+  //   → clear helper_uid, helper_name, helper_confirmed
+  //   → status balik 'open'
+  //
+  // MULTIPLE:
+  //   → remove uid & name dari arrays
+  //   → buang entry dari helper_confirmations map (kalau ada)
+  //   → accepted_slots - 1
+  //   → status balik 'open' (walaupun sebelum ni 'full')
+
+  Future<Map<String, dynamic>> ownerCancelHelper({
+    required String postId,
+    required String helperUid,
+    required String helperName,
+    required bool isMultiple,
+    bool isIndividual = true,
+  }) async {
+    try {
+      if (isMultiple) {
+        final doc =
+            await _firestore.collection(_collection).doc(postId).get();
+        if (!doc.exists) {
+          return {'success': false, 'message': 'Post tidak wujud'};
+        }
+
+        final data = doc.data()!;
+        final currentAccepted =
+            (data['accepted_slots'] as num?)?.toInt() ?? 0;
+        final newAccepted =
+            (currentAccepted - 1).clamp(0, currentAccepted);
+
+        final updateData = <String, dynamic>{
+          'accepted_slots': newAccepted,
+          'helper_uids': FieldValue.arrayRemove([helperUid]),
+          'helper_names': FieldValue.arrayRemove([helperName]),
+          'status': 'open',
+        };
+
+        // Buang entry confirmation kalau ada (individual type)
+        if (isIndividual) {
+          updateData['helper_confirmations.$helperUid'] =
+              FieldValue.delete();
+        }
+
+        await _firestore
+            .collection(_collection)
+            .doc(postId)
+            .update(updateData);
+      } else {
+        // Single — clear semua helper fields
+        await _firestore.collection(_collection).doc(postId).update({
+          'status': 'open',
+          'helper_uid': FieldValue.delete(),
+          'helper_name': FieldValue.delete(),
+          'helper_confirmed': false,
+          'helper_confirmed_at': FieldValue.delete(),
+        });
+      }
+      return {'success': true};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // ─── HELPER WITHDRAW ──────────────────────────────────────────────
+  //
+  // Helper tarik diri sendiri dari post.
+  // Logic sama seperti ownerCancelHelper.
+
+  Future<Map<String, dynamic>> helperWithdraw({
+    required String postId,
+    required String helperUid,
+    required String helperName,
+    required bool isMultiple,
+    bool isIndividual = true,
+  }) async {
+    return ownerCancelHelper(
+      postId: postId,
+      helperUid: helperUid,
+      helperName: helperName,
+      isMultiple: isMultiple,
+      isIndividual: isIndividual,
+    );
   }
 }

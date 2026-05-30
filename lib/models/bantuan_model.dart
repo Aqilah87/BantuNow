@@ -30,17 +30,33 @@ class BantuanModel {
   final bool helperConfirmed;
   final String? posterAvailability;
 
-  // ── Slot system (untuk type == 'offer') ──────────────────────────
-  // offerType     : 'single' = Satu Orang | 'multiple' = Ramai Orang
-  // totalSlots    : hanya relevan bila offerType == 'multiple'
-  // acceptedSlots : berapa ramai yang dah accept (auto-increment)
-  // helperUids    : list uid yang dah join (multiple)
-  // helperNames   : list nama yang dah join (multiple)
+  // ── Slot system (untuk KEDUA-DUA offer DAN request) ──────────────
+  //
+  // offerType      : 'single' | 'multiple'
+  //                  → apply untuk request DAN offer
+  //                  → request pun boleh perlukan ramai org (angkat barang, dll)
+  //
+  // completionType : 'individual' | 'group'
+  //                  → hanya relevan bila offerType == 'multiple'
+  //                  → 'individual' : helpers datang satu-satu, setiap satu confirm sendiri
+  //                  → 'group'      : semua datang serentak, owner je yang close
+  //
+  // totalSlots     : hanya relevan bila offerType == 'multiple'
+  // acceptedSlots  : berapa ramai yang dah accept (auto-increment)
+  // helperUids     : list uid yang dah join (multiple)
+  // helperNames    : list nama yang dah join (multiple)
   final String offerType;
+  final String completionType;
   final int? totalSlots;
   final int acceptedSlots;
   final List<String> helperUids;
   final List<String> helperNames;
+
+  // ── Per-helper confirmation (untuk multiple + individual) ─────────
+  // helperConfirmations : { "uid_A": true, "uid_B": false, ... }
+  // Hanya digunakan bila completionType == 'individual'
+  // Untuk 'group', owner terus close tanpa tunggu setiap helper confirm
+  final Map<String, bool> helperConfirmations;
 
   BantuanModel({
     required this.id,
@@ -66,15 +82,24 @@ class BantuanModel {
     this.helperConfirmed = false,
     this.posterAvailability,
     this.offerType = 'single',
+    this.completionType = 'individual',
     this.totalSlots,
     this.acceptedSlots = 0,
     this.helperUids = const [],
     this.helperNames = const [],
+    this.helperConfirmations = const {},
   });
 
   // ── Getters ───────────────────────────────────────────────────────
 
+  /// Post ini guna sistem multiple slot?
   bool get isMultipleSlot => offerType == 'multiple';
+
+  /// Helpers datang satu-satu dan confirm secara individu?
+  bool get isIndividualCompletion => completionType == 'individual';
+
+  /// Helpers datang serentak, owner yang close?
+  bool get isGroupCompletion => completionType == 'group';
 
   /// Masih ada slot kosong?
   bool get hasAvailableSlot {
@@ -89,7 +114,25 @@ class BantuanModel {
     return (totalSlots! - acceptedSlots).clamp(0, totalSlots!);
   }
 
+  /// Berapa ramai helper yang dah confirm selesai (multiple + individual)
+  int get confirmedCount =>
+      helperConfirmations.values.where((v) => v == true).length;
+
+  /// Semua helper dalam helperUids dah confirm? (multiple + individual)
+  bool get allHelpersConfirmed =>
+      helperUids.isNotEmpty &&
+      helperUids.every((uid) => helperConfirmations[uid] == true);
+
   factory BantuanModel.fromMap(Map<String, dynamic> map, String id) {
+    // Parse helperConfirmations dari Firestore map
+    Map<String, bool> parseConfirmations(dynamic raw) {
+      if (raw == null) return {};
+      if (raw is Map) {
+        return raw.map((k, v) => MapEntry(k.toString(), v == true));
+      }
+      return {};
+    }
+
     return BantuanModel(
       id: id,
       title: map['title'] ?? '',
@@ -116,10 +159,12 @@ class BantuanModel {
       helperConfirmed: map['helper_confirmed'] ?? false,
       posterAvailability: map['poster_availability'],
       offerType: map['offer_type'] ?? 'single',
+      completionType: map['completion_type'] ?? 'individual',
       totalSlots: (map['total_slots'] as num?)?.toInt(),
       acceptedSlots: (map['accepted_slots'] as num?)?.toInt() ?? 0,
       helperUids: List<String>.from(map['helper_uids'] ?? []),
       helperNames: List<String>.from(map['helper_names'] ?? []),
+      helperConfirmations: parseConfirmations(map['helper_confirmations']),
     );
   }
 
@@ -147,10 +192,12 @@ class BantuanModel {
       if (posterAvailability != null)
         'poster_availability': posterAvailability,
       'offer_type': offerType,
+      'completion_type': completionType,
       if (totalSlots != null) 'total_slots': totalSlots,
       'accepted_slots': acceptedSlots,
       'helper_uids': helperUids,
       'helper_names': helperNames,
+      'helper_confirmations': helperConfirmations,
     };
   }
 }
@@ -159,8 +206,12 @@ class BantuanModel {
 
 class BantuanCategories {
   // defaultOfferType:
-  //   'multiple' → auto-set slot bila user pilih kategori ni (Offer)
-  //   'single'   → auto-set satu orang bila user pilih kategori ni (Offer)
+  //   'multiple' → auto-set slot bila user pilih kategori ni
+  //   'single'   → auto-set satu orang bila user pilih kategori ni
+  //
+  // defaultCompletionType (hanya relevan bila multiple):
+  //   'individual' → helpers datang satu-satu, confirm sendiri
+  //   'group'      → semua datang serentak, owner close
 
   static const List<Map<String, String>> categories = [
     {
@@ -168,60 +219,70 @@ class BantuanCategories {
       'name': 'Makanan & Minuman / Food',
       'icon': '🍱',
       'defaultOfferType': 'single',
+      'defaultCompletionType': 'individual',
     },
     {
       'id': 'transport',
       'name': 'Transport / Ride',
       'icon': '🚗',
       'defaultOfferType': 'single',
+      'defaultCompletionType': 'individual',
     },
     {
       'id': 'perubatan',
       'name': 'Perubatan / Medical',
       'icon': '🏥',
       'defaultOfferType': 'single',
+      'defaultCompletionType': 'individual',
     },
     {
       'id': 'repair',
       'name': 'Repair / Baiki',
       'icon': '🔧',
-      'defaultOfferType': 'single',
+      'defaultOfferType': 'multiple',
+      'defaultCompletionType': 'group',
     },
     {
       'id': 'angkat_barang',
       'name': 'Angkat Barang / Moving',
       'icon': '📦',
-      'defaultOfferType': 'single',
+      'defaultOfferType': 'multiple',
+      'defaultCompletionType': 'group',
     },
     {
       'id': 'pendidikan',
       'name': 'Pendidikan / Education',
       'icon': '📚',
       'defaultOfferType': 'multiple',
+      'defaultCompletionType': 'individual',
     },
     {
       'id': 'kerja',
       'name': 'Kerja / Employment',
       'icon': '💼',
       'defaultOfferType': 'multiple',
+      'defaultCompletionType': 'individual',
     },
     {
       'id': 'kewangan',
       'name': 'Kewangan / Financial',
       'icon': '💰',
       'defaultOfferType': 'single',
+      'defaultCompletionType': 'individual',
     },
     {
       'id': 'kecemasan',
       'name': 'Kecemasan / Emergency',
       'icon': '🚨',
       'defaultOfferType': 'single',
+      'defaultCompletionType': 'individual',
     },
     {
       'id': 'lain',
       'name': 'Lain-lain / Others',
       'icon': '🤝',
       'defaultOfferType': 'single',
+      'defaultCompletionType': 'individual',
     },
   ];
 
@@ -231,7 +292,8 @@ class BantuanCategories {
       orElse: () => {
         'name': 'Lain-lain / Others',
         'icon': '🤝',
-        'defaultOfferType': 'single'
+        'defaultOfferType': 'single',
+        'defaultCompletionType': 'individual',
       },
     );
     return cat['name']!;
@@ -243,7 +305,8 @@ class BantuanCategories {
       orElse: () => {
         'name': 'Lain-lain / Others',
         'icon': '🤝',
-        'defaultOfferType': 'single'
+        'defaultOfferType': 'single',
+        'defaultCompletionType': 'individual',
       },
     );
     return cat['icon']!;
@@ -255,9 +318,23 @@ class BantuanCategories {
       orElse: () => {
         'name': 'Lain-lain / Others',
         'icon': '🤝',
-        'defaultOfferType': 'single'
+        'defaultOfferType': 'single',
+        'defaultCompletionType': 'individual',
       },
     );
     return cat['defaultOfferType'] ?? 'single';
+  }
+
+  static String getDefaultCompletionType(String id) {
+    final cat = categories.firstWhere(
+      (c) => c['id'] == id,
+      orElse: () => {
+        'name': 'Lain-lain / Others',
+        'icon': '🤝',
+        'defaultOfferType': 'single',
+        'defaultCompletionType': 'individual',
+      },
+    );
+    return cat['defaultCompletionType'] ?? 'individual';
   }
 }
