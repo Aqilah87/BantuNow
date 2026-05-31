@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../utils/colors.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'onboarding_screen.dart';
+import '../main_screen.dart'; 
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -43,11 +46,41 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (!mounted) return;
 
-    // Sentiasa pergi OnboardingScreen — setiap kali buka app
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-    );
+    // Check sama ada perlu tunjuk onboarding
+    final shouldShow = await _shouldShowOnboarding();
+
+    if (!mounted) return;
+
+    if (shouldShow) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainScreen()),
+      );
+    }
+  }
+
+  Future<bool> _shouldShowOnboarding() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final info = await PackageInfo.fromPlatform();
+      final currentVersion = info.version; // contoh: "1.0.0"
+
+      final savedVersion = prefs.getString('onboarding_version');
+
+      if (savedVersion != currentVersion) {
+        // Version baru atau first install — tunjuk onboarding
+        await prefs.setString('onboarding_version', currentVersion);
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return true; // Kalau error, tunjuk onboarding je
+    }
   }
 
   @override

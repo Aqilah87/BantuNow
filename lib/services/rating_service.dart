@@ -64,10 +64,12 @@ class RatingService {
     }
     final average = total / ratings.docs.length;
 
-    await _firestore.collection('users').doc(userUid).update({
+    // Guna set dengan merge:true supaya boleh create field baru
+    // walaupun user document tak ada field rating lagi
+    await _firestore.collection('users').doc(userUid).set({
       'rating': double.parse(average.toStringAsFixed(1)),
       'rating_count': ratings.docs.length,
-    });
+    }, SetOptions(merge: true));
   }
 
   // Get semua ratings untuk seorang user

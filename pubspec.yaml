@@ -22,6 +22,7 @@ dependencies:
   
   # UI & Navigation
   shared_preferences: ^2.2.2
+  package_info_plus: ^4.0.0
   google_fonts: ^6.1.0
   
   # Icons

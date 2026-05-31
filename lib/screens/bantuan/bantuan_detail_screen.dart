@@ -17,6 +17,8 @@ import '../../services/bantuan_service.dart';
 import '../../services/deep_link_service.dart';
 import '../../widgets/rating_dialog.dart';
 import '../profile/user_profile_screen.dart';
+import '../chat/chat_screen.dart';       
+import '../../services/chat_service.dart';
 
 class BantuanDetailScreen extends StatefulWidget {
   final BantuanModel bantuan;
@@ -169,33 +171,50 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     return cleaned;
   }
 
-  Future<void> _openWhatsApp(bool isMalay) async {
+  Future<void> _openChat(bool isMalay) async {
     if (!widget.isLoggedIn) {
       widget.onLoginRequired(
-          isMalay ? 'menghubungi melalui WhatsApp' : 'contact via WhatsApp');
+          isMalay ? 'menghantar mesej' : 'send a message');
       return;
     }
-    final phone = _bantuan.whatsapp ?? _posterPhone;
-    if (phone.isEmpty) {
+
+    // Tak boleh chat dengan diri sendiri
+    if (_isOwner) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(isMalay
-            ? 'Nombor WhatsApp tidak tersedia'
-            : 'WhatsApp number not available'),
+            ? 'Ini adalah post anda sendiri'
+            : 'This is your own post'),
       ));
       return;
     }
-    final formatted = _formatWhatsApp(phone);
-    final message = Uri.encodeComponent(
-        '${isMalay ? 'Salam' : 'Hello'}, ${isMalay ? 'saya berminat dengan post anda bertajuk' : 'I am interested in your post titled'} "${_bantuan.title}" ${isMalay ? 'di' : 'on'} BantuNow.');
-    final url = Uri.parse('https://wa.me/$formatted?text=$message');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
+
+    try {
+      final chatService = ChatService();
+      final conversationId = await chatService.getOrCreateConversation(
+        otherUid: _bantuan.postedByUid,
+        otherName: _bantuan.postedBy,
+        bantuanId: _bantuan.id,
+        bantuanTitle: _bantuan.title,
+      );
+
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            conversationId: conversationId,
+            otherUserName: _bantuan.postedBy,
+            otherUserUid: _bantuan.postedByUid,
+            bantuanTitle: _bantuan.title,
+          ),
+        ),
+      );
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(isMalay
-              ? 'Tidak dapat membuka WhatsApp'
-              : 'Cannot open WhatsApp'),
+              ? 'Gagal membuka mesej: $e'
+              : 'Failed to open chat: $e'),
         ));
       }
     }
@@ -1671,6 +1690,64 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                         style: TextStyle(
                                             fontSize: 13,
                                             color: AppColors.textGrey)),
+                                    const SizedBox(height: 4),
+                                    // ── Rating poster ──────────────
+                                    FutureBuilder<DocumentSnapshot>(
+                                      future: FirebaseFirestore.instance
+                                          .collection('users')
+                                          .doc(bantuan.postedByUid)
+                                          .get(),
+                                      builder: (ctx, snap) {
+                                        final data = snap.hasData &&
+                                                snap.data!.exists
+                                            ? snap.data!.data()
+                                                as Map<String, dynamic>
+                                            : null;
+                                        final avg = (data?['rating']
+                                                    as num?)
+                                                ?.toDouble() ??
+                                            0.0;
+                                        final count = (data?[
+                                                    'rating_count']
+                                                as num?)
+                                            ?.toInt() ?? 0;
+                                        if (count == 0) {
+                                          return Text(
+                                            'Belum ada rating',
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                color: AppColors.textGrey),
+                                          );
+                                        }
+                                        return Row(
+                                            mainAxisSize:
+                                                MainAxisSize.min,
+                                            children: [
+                                              const Icon(
+                                                  Icons.star_rounded,
+                                                  color: Colors.amber,
+                                                  size: 14),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                avg.toStringAsFixed(1),
+                                                style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    color:
+                                                        AppColors.textDark),
+                                              ),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                '($count ulasan)',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color:
+                                                        AppColors.textGrey),
+                                              ),
+                                            ]);
+                                      },
+                                    ),
                                   ]),
                             ),
                             Icon(Icons.chevron_right,
@@ -1796,31 +1873,31 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 12),
 
-                  // ── WhatsApp button ────────────────────────────────
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: ElevatedButton.icon(
-                      onPressed: _isActionLoading
-                          ? null
-                          : () => _openWhatsApp(isMalay),
-                      icon: const Icon(Icons.chat, color: Colors.white),
-                      label: Text(
-                          isMalay
-                              ? 'Hubungi via WhatsApp'
-                              : 'Contact via WhatsApp',
-                          style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF25D366),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
+                  // ── Hubungi button (in-app chat) ───────────────────
+                  if (!_isOwner)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton.icon(
+                        onPressed: _isActionLoading
+                            ? null
+                            : () => _openChat(isMalay),
+                        icon: const Icon(Icons.message_outlined,
+                            color: Colors.white),
+                        label: Text(
+                            isMalay ? 'Hubungi' : 'Contact',
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryBlue,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
                       ),
                     ),
-                  ),
 
                   // ── Action buttons ─────────────────────────────────
                   ..._buildActionButtons(isMalay),
@@ -1961,6 +2038,164 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               ]),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  // ─── HELPER STATUS LIST (visible to all joined helpers) ──────────
+
+  Widget _buildHelperStatusList(bool isMalay) {
+    final helpers = _bantuan.helperUids;
+    if (helpers.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.groups_outlined, size: 16, color: AppColors.primaryBlue),
+            const SizedBox(width: 6),
+            Text(
+              isMalay ? 'Status Helper' : 'Helper Status',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textGrey),
+            ),
+            const Spacer(),
+            if (!_isGroupCompletion)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _bantuan.allHelpersConfirmed
+                      ? Colors.green.withOpacity(0.12)
+                      : Colors.orange.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${_bantuan.confirmedCount}/${helpers.length} ✅',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: _bantuan.allHelpersConfirmed
+                          ? Colors.green.shade700
+                          : Colors.orange.shade700),
+                ),
+              ),
+          ]),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          ...helpers.asMap().entries.map((entry) {
+            final index = entry.key;
+            final uid = entry.value;
+            final name = index < _bantuan.helperNames.length
+                ? _bantuan.helperNames[index]
+                : 'Helper ${index + 1}';
+            final isMe = uid == _currentUid;
+            final isDone = _isGroupCompletion
+                ? false
+                : _bantuan.helperConfirmations[uid] == true;
+            final dotColor = _isGroupCompletion
+                ? Colors.indigo
+                : (isDone ? Colors.green : Colors.orange);
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: dotColor.withOpacity(0.12),
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : 'H',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: dotColor),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Row(children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: isMe ? FontWeight.bold : FontWeight.normal,
+                          color: AppColors.textDark),
+                    ),
+                    if (isMe) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryBlue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          isMalay ? 'Saya' : 'Me',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.primaryBlue,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ]),
+                ),
+                _isGroupCompletion
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          isMalay ? '👥 Serentak' : '👥 Group',
+                          style: TextStyle(
+                              fontSize: 11, color: Colors.indigo.shade600),
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: dotColor.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Text(isDone ? '✅' : '⏳',
+                              style: const TextStyle(fontSize: 11)),
+                          const SizedBox(width: 4),
+                          Text(
+                            isDone
+                                ? (isMalay ? 'Selesai' : 'Done')
+                                : (isMalay ? 'Belum' : 'Pending'),
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: dotColor,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ]),
+                      ),
+              ]),
+            );
+          }),
         ],
       ),
     );
@@ -2338,12 +2573,14 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
             if (_hasAlreadyJoined) {
             if (_isGroupCompletion) {
               // Group: info banner + tarik diri je
-              widgets.addAll([
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.indigo.withOpacity(0.06),
+                    widgets.addAll([
+                    const SizedBox(height: 12),
+                    _buildHelperStatusList(isMalay),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.indigo.withOpacity(0.06),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.indigo.withOpacity(0.25)),
                   ),
@@ -2390,15 +2627,17 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               ]);
           } else {
             // Belum confirm — tunjuk "Saya Dah Selesai" + "Tarik Diri"
-            widgets.addAll([
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton.icon(
-                  onPressed: _isActionLoading
-                      ? null
-                      : () => _helperConfirmDone(isMalay),
+                  widgets.addAll([
+                  const SizedBox(height: 12),
+                  _buildHelperStatusList(isMalay),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: _isActionLoading
+                          ? null
+                          : () => _helperConfirmDone(isMalay),
                   icon: const Icon(Icons.check_circle_outline,
                       color: Colors.white),
                   label: Text(

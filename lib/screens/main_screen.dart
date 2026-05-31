@@ -8,6 +8,8 @@ import 'bantuan/post_bantuan_screen.dart';
 import 'my_posts/my_posts_screen.dart';
 import 'profile/profile_screen.dart';
 import 'auth/login_screen.dart';
+import 'chat/conversation_list_screen.dart';
+import '../../services/chat_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -18,6 +20,20 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  int _unreadCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenUnread();
+  }
+
+  void _listenUnread() {
+    final chatService = ChatService();
+    chatService.getTotalUnreadStream().listen((count) {
+      if (mounted) setState(() => _unreadCount = count);
+    });
+  }
 
   void _showLoginRequired(BuildContext context, String action) {
     showDialog(
@@ -62,14 +78,16 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onTabTapped(int index, bool isLoggedIn) {
-    if ((index == 1 || index == 2 || index == 3) && !isLoggedIn) {
+    if ((index == 1 || index == 2 || index == 3 || index == 4) && !isLoggedIn) {
       _showLoginRequired(
         context,
         index == 1
             ? 'post bantuan'
             : index == 2
-                ? 'melihat post anda'
-                : 'melihat profil',
+                ? 'melihat mesej'
+                : index == 3
+                    ? 'melihat post anda'
+                    : 'melihat profil',
       );
       return;
     }
@@ -103,70 +121,135 @@ class _MainScreenState extends State<MainScreen> {
         final user = snapshot.data ?? FirebaseAuth.instance.currentUser;
         final isLoggedIn = user != null;
 
-        final screens = [
-          const HomeScreen(),
-          const SizedBox(),
-          const MyPostsScreen(),
-          const ProfileScreen(),
-        ];
+    final screens = [
+      const HomeScreen(),
+      const SizedBox(),           // index 1 = Post (push, bukan tab)
+      const ConversationListScreen(), // index 2 = Messages
+      const MyPostsScreen(),      // index 3
+      const ProfileScreen(),      // index 4
+    ];
 
-        return Scaffold(
-          body: IndexedStack(
-            index: _currentIndex,
-            children: screens,
-          ),
-          bottomNavigationBar: Container(
-            decoration: BoxDecoration(
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, -2),
-                ),
-              ],
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: screens,
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
             ),
-            child: BottomNavigationBar(
-              currentIndex: _currentIndex == 1 ? 0 : _currentIndex,
-              onTap: (index) => _onTabTapped(index, isLoggedIn),
-              type: BottomNavigationBarType.fixed,
-              backgroundColor: Colors.white,
-              selectedItemColor: AppColors.primaryBlue,
-              unselectedItemColor: AppColors.textGrey,
-              selectedLabelStyle: const TextStyle(
-                  fontSize: 11, fontWeight: FontWeight.w600),
-              unselectedLabelStyle: const TextStyle(fontSize: 11),
-              items: [
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.home_outlined),
-                  activeIcon: Icon(Icons.home),
-                  label: 'Home',
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex == 1 ? 0 : _currentIndex,
+          onTap: (index) => _onTabTapped(index, isLoggedIn),
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          selectedItemColor: AppColors.primaryBlue,
+          unselectedItemColor: AppColors.textGrey,
+          selectedLabelStyle: const TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w600),
+          unselectedLabelStyle: const TextStyle(fontSize: 11),
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryBlue,
+                  shape: BoxShape.circle,
                 ),
-                BottomNavigationBarItem(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryBlue,
-                      shape: BoxShape.circle,
+                child: const Icon(Icons.add,
+                    color: Colors.white, size: 22),
+              ),
+              label: 'Post',
+            ),
+            // ── Messages tab dengan unread badge ────────────────
+            BottomNavigationBarItem(
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.chat_bubble_outline),
+                  if (_unreadCount > 0)
+                    Positioned(
+                      right: -6,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                            minWidth: 16, minHeight: 16),
+                        child: Text(
+                          _unreadCount > 99
+                              ? '99+'
+                              : _unreadCount.toString(),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     ),
-                    child: const Icon(Icons.add,
-                        color: Colors.white, size: 22),
-                  ),
-                  label: 'Post',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.article_outlined),
-                  activeIcon: Icon(Icons.article),
-                  label: 'My Posts',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.person_outline),
-                  activeIcon: Icon(Icons.person),
-                  label: 'Profile',
-                ),
-              ],
+                ],
+              ),
+              activeIcon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.chat_bubble),
+                  if (_unreadCount > 0)
+                    Positioned(
+                      right: -6,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                            minWidth: 16, minHeight: 16),
+                        child: Text(
+                          _unreadCount > 99
+                              ? '99+'
+                              : _unreadCount.toString(),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              label: 'Mesej',
             ),
-          ),
-        );
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.article_outlined),
+              activeIcon: Icon(Icons.article),
+              label: 'My Posts',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        ),
+      ),
+);
       },
     );
   }

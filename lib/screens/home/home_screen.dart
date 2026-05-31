@@ -16,6 +16,9 @@ import '../location/select_location_screen.dart';
 import '../bantuan/bantuan_detail_screen.dart';
 import '../bantuan/post_bantuan_screen.dart';
 import '../map/map_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../chat/chat_screen.dart';        
+import '../../services/chat_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -109,33 +112,52 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _openWhatsApp(
+  Future<void> _openChat(
       BuildContext context, BantuanModel bantuan, bool isMalay) async {
     if (!_isLoggedIn) {
       _showLoginRequired(context,
-          isMalay ? 'menghubungi melalui WhatsApp' : 'contact via WhatsApp',
-          isMalay);
+          isMalay ? 'menghantar mesej' : 'send a message', isMalay);
       return;
     }
-    if (bantuan.whatsapp == null || bantuan.whatsapp!.isEmpty) {
+
+    // Tak boleh chat dengan diri sendiri
+    final currentUid = FirebaseAuth.instance.currentUser!.uid;
+    if (bantuan.postedByUid == currentUid) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(isMalay
-            ? 'Nombor WhatsApp tidak tersedia'
-            : 'WhatsApp number not available'),
+            ? 'Ini adalah post anda sendiri'
+            : 'This is your own post'),
       ));
       return;
     }
-    final message = Uri.encodeComponent(
-        '${isMalay ? 'Salam' : 'Hello'}, ${isMalay ? 'saya berminat dengan post anda bertajuk' : 'I am interested in your post titled'} "${bantuan.title}" ${isMalay ? 'di' : 'on'} BantuNow.');
-    final url = Uri.parse('https://wa.me/${bantuan.whatsapp}?text=$message');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } else {
+
+    try {
+      final chatService = ChatService();
+      final conversationId = await chatService.getOrCreateConversation(
+        otherUid: bantuan.postedByUid,
+        otherName: bantuan.postedBy,
+        bantuanId: bantuan.id,
+        bantuanTitle: bantuan.title,
+      );
+
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            conversationId: conversationId,
+            otherUserName: bantuan.postedBy,
+            otherUserUid: bantuan.postedByUid,
+            bantuanTitle: bantuan.title,
+          ),
+        ),
+      );
+    } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(isMalay
-              ? 'Tidak dapat membuka WhatsApp'
-              : 'Cannot open WhatsApp'),
+              ? 'Gagal membuka mesej: $e'
+              : 'Failed to open chat: $e'),
         ));
       }
     }
@@ -699,7 +721,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: _buildAppBar(isMalay),
       body: RefreshIndicator(
-        onRefresh: () => provider.loadUserAreaAndLocation(),
+        onRefresh: () => context.read<BantuanProvider>().refreshStream(),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
@@ -1558,11 +1580,81 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 12),
                   const Divider(height: 1),
                   const SizedBox(height: 12),
-                  Row(children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        // Sama dengan GestureDetector onTap
-                        onPressed: openDetail,
+
+                        // ── Poster info + rating ───────────────────────────
+                        FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(bantuan.postedByUid)
+                              .get(),
+                          builder: (ctx, snap) {
+                            final data = snap.hasData && snap.data!.exists
+                                ? snap.data!.data() as Map<String, dynamic>
+                                : null;
+                            final avgRating =
+                                (data?['rating'] as num?)?.toDouble() ?? 0.0;
+                            final ratingCount =
+                                (data?['rating_count'] as num?)?.toInt() ?? 0;
+                            return Row(children: [
+                              CircleAvatar(
+                                radius: 14,
+                                backgroundColor:
+                                    AppColors.primaryBlue.withOpacity(0.12),
+                                child: Text(
+                                  bantuan.postedBy.isNotEmpty
+                                      ? bantuan.postedBy[0].toUpperCase()
+                                      : 'U',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primaryBlue),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  bantuan.postedBy,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: AppColors.textDark),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (ratingCount > 0) ...[
+                                const Icon(Icons.star_rounded,
+                                    color: Colors.amber, size: 14),
+                                const SizedBox(width: 2),
+                                Text(
+                                  avgRating.toStringAsFixed(1),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textDark),
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  '($ratingCount)',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textGrey),
+                                ),
+                              ] else
+                                Text(
+                                  isMalay ? 'Belum ada rating' : 'No rating yet',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textGrey),
+                                ),
+                            ]);
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: openDetail,
+
                         icon: Icon(Icons.visibility_outlined,
                             size: 16, color: AppColors.primaryBlue),
                         label: Text(
@@ -1582,17 +1674,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton.icon(
-                        // Button WhatsApp ada onPressed sendiri —
-                        // tidak akan trigger GestureDetector
                         onPressed: () =>
-                            _openWhatsApp(context, bantuan, isMalay),
-                        icon: const Icon(Icons.chat,
+                            _openChat(context, bantuan, isMalay),
+                        icon: const Icon(Icons.message_outlined,
                             size: 16, color: Colors.white),
-                        label: const Text('WhatsApp',
-                            style: TextStyle(
+                        label: Text(
+                            isMalay ? 'Hubungi' : 'Contact',
+                            style: const TextStyle(
                                 fontSize: 13, color: Colors.white)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF25D366),
+                          backgroundColor: AppColors.primaryBlue,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
                           padding:

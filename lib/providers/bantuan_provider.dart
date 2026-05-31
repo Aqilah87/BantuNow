@@ -84,10 +84,14 @@ class BantuanProvider extends ChangeNotifier {
     try {
       final gps = await LocationService.getCurrentLocation();
 
-      if (gps != null) {
-        _userLat = gps.latitude;
-        _userLon = gps.longitude;
+        if (gps != null) {
         _gpsDetected = true;
+
+        // Guna GPS HANYA kalau user belum pilih kawasan manual
+        if (_userAreaId.isEmpty || _gpsFromAuto) {
+          _userLat = gps.latitude;
+          _userLon = gps.longitude;
+        }
 
         // Auto-set kawasan terdekat HANYA kalau user belum pilih kawasan
         if (_userAreaId.isEmpty) {
@@ -257,6 +261,11 @@ class BantuanProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _userArea = prefs.getString('user_area_name') ?? '';
     _userAreaId = prefs.getString('user_area_id') ?? '';
+    notifyListeners();
+  }
+  // ── Force refresh stream ──────────────────────────────────────────
+  Future<void> refreshStream() async {
+    await loadUserAreaAndLocation();
     notifyListeners();
   }
 }
