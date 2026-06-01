@@ -20,7 +20,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _authService = AuthService();
@@ -38,7 +37,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
       email: _emailController.text.trim(),
       password: _passwordController.text,
       name: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
     );
     
     setState(() => _isLoading = false);
@@ -140,25 +138,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 
                 const SizedBox(height: 20),
                 
-                // Phone Field
-                CustomTextField(
-                  controller: _phoneController,
-                  label: 'Phone Number',
-                  hintText: 'Enter your phone number',
-                  prefixIcon: Icons.phone_outlined,
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your phone number';
-                    }
-                    if (value.length < 10) {
-                      return 'Please enter a valid phone number';
-                    }
-                    return null;
-                  },
-                ),
-                
-                const SizedBox(height: 20),
                 
                 // Password Field
                 CustomTextField(
@@ -248,7 +227,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();

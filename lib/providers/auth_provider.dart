@@ -61,7 +61,6 @@ class AuthProvider extends ChangeNotifier {
       email: email,
       password: password,
       name: name,
-      phone: phone,
     );
     notifyListeners();
     return result;

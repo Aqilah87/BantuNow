@@ -17,7 +17,6 @@ class AuthService {
     required String email,
     required String password,
     required String name,
-    required String phone,
   }) async {
     try {
       // Create user
@@ -31,7 +30,6 @@ class AuthService {
         'user_id': userCredential.user!.uid,
         'name': name,
         'email': email,
-        'num_phone': phone,
         'role': 'both', // Default role
         'availability_status': 'available',
         'created_at': FieldValue.serverTimestamp(),
@@ -110,7 +108,6 @@ class AuthService {
           'user_id': userCredential.user!.uid,
           'name': userCredential.user!.displayName ?? 'User',
           'email': userCredential.user!.email,
-          'num_phone': userCredential.user!.phoneNumber ?? '',
           'role': 'both',
           'availability_status': 'available',
           'created_at': FieldValue.serverTimestamp(),

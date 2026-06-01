@@ -28,7 +28,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
-  final _whatsappController = TextEditingController();
   final _slotsController = TextEditingController(text: '10');
   final _bantuanService = BantuanService();
   final _imagePicker = ImagePicker();
@@ -38,7 +37,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
   String _selectedAreaId = '';
   String _selectedAreaName = '';
   bool _isLoading = false;
-  bool _isLoadingPhone = true;
   File? _selectedImage;
   String? _existingImageUrl;
   bool _removeExistingImage = false;
@@ -76,7 +74,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
     final post = widget.existingPost!;
     _titleController.text = post.title;
     _descController.text = post.description;
-    _whatsappController.text = post.whatsapp ?? '';
     _selectedType = post.type;
     _selectedCategory = post.category;
     _selectedAreaId = post.areaId;
@@ -91,7 +88,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
       _slotsController.text = post.totalSlots.toString();
     }
     _userOverrideOfferType = true; // edit mode = treat as manual
-    setState(() => _isLoadingPhone = false);
   }
 
   Future<void> _loadUserData() async {
@@ -100,21 +96,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
       _selectedAreaId = prefs.getString('user_area_id') ?? '';
       _selectedAreaName = prefs.getString('user_area_name') ?? '';
     });
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-        if (doc.exists) {
-          final phone = doc.data()?['num_phone'] ?? '';
-          setState(() => _whatsappController.text = _formatWhatsApp(phone));
-        }
-      }
-    } catch (_) {} finally {
-      setState(() => _isLoadingPhone = false);
-    }
   }
 
   // ── Auto-set offerType bila category bertukar ──────────────────────
@@ -143,13 +124,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
         _slotsController.text = '10';
       }
     });
-  }
-
-  String _formatWhatsApp(String phone) {
-    String cleaned = phone.replaceAll(RegExp(r'\D'), '');
-    if (cleaned.startsWith('0')) cleaned = '6$cleaned';
-    if (!cleaned.startsWith('60')) cleaned = '60$cleaned';
-    return cleaned;
   }
 
   // ── Buka map picker ────────────────────────────────────────────────
@@ -377,7 +351,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
           'area': _selectedAreaName,
           'area_id': _selectedAreaId,
           'type': _selectedType,
-          'whatsapp': _whatsappController.text.trim(),
           'image_url': imageUrl,
           'latitude': areaData?.latitude,
           'longitude': areaData?.longitude,
@@ -423,7 +396,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
         type: _selectedType,
         postedBy: user.displayName ?? user.email ?? 'User',
         postedByUid: user.uid,
-        whatsapp: _whatsappController.text.trim(),
         imageUrl: imageUrl,
         createdAt: DateTime.now(),
         latitude: areaData?.latitude,
@@ -770,70 +742,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
                     ? _buildPinPreview(isMalay)
                     : _buildPinPlaceholder(isMalay),
               ),
-
-              const SizedBox(height: 24),
-
-              // ── WhatsApp ───────────────────────────────────────────
-              _buildSectionLabel(
-                  isMalay ? 'Nombor WhatsApp' : 'WhatsApp Number',
-                  Icons.phone_outlined),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: Colors.green.withOpacity(0.3)),
-                ),
-                child: Row(children: [
-                  const Icon(Icons.info_outline,
-                      size: 16, color: Colors.green),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: Text(
-                    isMalay
-                        ? 'Nombor ini akan jadi butang WhatsApp untuk orang hubungi anda terus.'
-                        : 'This number will be the WhatsApp button for people to contact you.',
-                    style:
-                        TextStyle(fontSize: 12, color: Colors.green.shade700),
-                  )),
-                ]),
-              ),
-              const SizedBox(height: 10),
-              _isLoadingPhone
-                  ? Container(
-                      height: 54,
-                      decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border:
-                              Border.all(color: AppColors.lightGrey)),
-                      child: const Center(
-                          child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2))),
-                    )
-                  : _buildTextField(
-                      controller: _whatsappController,
-                      hint: 'Contoh: 60123456789',
-                      maxLines: 1,
-                      keyboardType: TextInputType.phone,
-                      validator: (val) {
-                        if (val == null || val.isEmpty)
-                          return isMalay
-                              ? 'Sila masukkan nombor WhatsApp'
-                              : 'Please enter WhatsApp number';
-                        if (val.length < 10)
-                          return isMalay
-                              ? 'Nombor tidak sah'
-                              : 'Invalid number';
-                        return null;
-                      },
-                    ),
 
               const SizedBox(height: 32),
 
@@ -1487,7 +1395,6 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
-    _whatsappController.dispose();
     _slotsController.dispose();
     super.dispose();
   }

@@ -27,9 +27,11 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
-    // Cuba silent sign in untuk refresh Google session
     final firebaseUser = FirebaseAuth.instance.currentUser;
+
+    // Kalau user dah login — terus ke MainScreen, langkau semua check
     if (firebaseUser != null) {
+      // Refresh Google session kalau login guna Google
       try {
         final googleSignIn = GoogleSignIn();
         final googleUser = await googleSignIn.signInSilently();
@@ -42,13 +44,18 @@ class _SplashScreenState extends State<SplashScreen> {
           await FirebaseAuth.instance.signInWithCredential(credential);
         }
       } catch (_) {}
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainScreen()),
+      );
+      return; // ← stop kat sini, tak perlu check onboarding
     }
 
+    // User belum login — check onboarding
     if (!mounted) return;
-
-    // Check sama ada perlu tunjuk onboarding
     final shouldShow = await _shouldShowOnboarding();
-
     if (!mounted) return;
 
     if (shouldShow) {

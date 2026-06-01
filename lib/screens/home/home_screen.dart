@@ -754,33 +754,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 fontWeight: FontWeight.bold,
                 fontSize: 20)),
       ]),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.map_outlined, color: Colors.white),
-          tooltip: isMalay ? 'Peta Bantuan' : 'Help Map',
-          onPressed: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const MapScreen())),
+
+    actions: [
+      IconButton(
+        icon: const Icon(Icons.map_outlined, color: Colors.white),
+        tooltip: isMalay ? 'Peta Bantuan' : 'Help Map',
+        onPressed: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const MapScreen())),
+      ),
+      if (!_isLoggedIn)
+        TextButton(
+          onPressed: () =>
+              Navigator.push(context,
+                      MaterialPageRoute(
+                          builder: (_) => const LoginScreen()))
+                  .then((_) => setState(() {})),
+          child: Text(isMalay ? 'Log Masuk' : 'Login',
+              style: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w600)),
         ),
-        if (_isLoggedIn)
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () async {
-              await _authService.signOut();
-              setState(() {});
-            },
-          )
-        else
-          TextButton(
-            onPressed: () =>
-                Navigator.push(context,
-                        MaterialPageRoute(
-                            builder: (_) => const LoginScreen()))
-                    .then((_) => setState(() {})),
-            child: Text(isMalay ? 'Log Masuk' : 'Login',
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w600)),
-          ),
-      ],
+    ],
     );
   }
 
@@ -1442,22 +1435,15 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (bantuan.imageUrl != null)
-              ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
-                child: Image.network(bantuan.imageUrl!,
-                    height: 160,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        _buildImagePlaceholder(isMalay)),
-              )
-            else
-              ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
-                child: _buildImagePlaceholder(isMalay),
-              ),
+            ClipRRect(
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+              child: Image.network(bantuan.imageUrl!,
+                  height: 160,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+            ),
             Padding(
               padding: const EdgeInsets.all(14),
               child: Column(

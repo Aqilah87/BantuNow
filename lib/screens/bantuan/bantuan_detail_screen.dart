@@ -38,8 +38,6 @@ class BantuanDetailScreen extends StatefulWidget {
 
 class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
   final _bantuanService = BantuanService();
-  String _posterPhone = '';
-  bool _isLoadingPhone = true;
   bool _isActionLoading = false;
 
   late BantuanModel _bantuan;
@@ -80,24 +78,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
   void initState() {
     super.initState();
     _bantuan = widget.bantuan;
-    _loadPosterPhone();
     _bantuanService.checkAndAutoClose();
-  }
-
-  Future<void> _loadPosterPhone() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_bantuan.postedByUid)
-          .get();
-      if (doc.exists) {
-        setState(() => _posterPhone = doc.data()?['num_phone'] ?? '');
-      }
-    } catch (e) {
-      setState(() => _posterPhone = _bantuan.whatsapp ?? '');
-    } finally {
-      setState(() => _isLoadingPhone = false);
-    }
   }
 
   // ─── Refresh bantuan dari Firestore ───────────────────────────────
@@ -151,24 +132,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
       default:
         return Icons.task_alt;
     }
-  }
-
-  // ─── Phone / WhatsApp ──────────────────────────────────────────────
-
-  String _formatPhoneDisplay(String phone) {
-    if (phone.isEmpty) return '';
-    String cleaned = phone.replaceAll(RegExp(r'\D'), '');
-    if (cleaned.startsWith('60') && cleaned.length >= 11) {
-      return '0${cleaned.substring(2)}';
-    }
-    return phone;
-  }
-
-  String _formatWhatsApp(String phone) {
-    String cleaned = phone.replaceAll(RegExp(r'\D'), '');
-    if (cleaned.startsWith('0')) cleaned = '6$cleaned';
-    if (!cleaned.startsWith('60')) cleaned = '60$cleaned';
-    return cleaned;
   }
 
   Future<void> _openChat(bool isMalay) async {
@@ -1411,8 +1374,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 isMalay
-                                    ? 'Cuba WhatsApp untuk kepastian.'
-                                    : 'Try WhatsApp to confirm.',
+                                    ? 'Cuba hubungi melalui chat untuk kepastian.'
+                                    : 'Try contacting via chat to confirm.',
                                 style: TextStyle(
                                     fontSize: 11,
                                     color: Colors.grey.shade600),
@@ -1754,71 +1717,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                                 color: AppColors.textGrey, size: 20),
                           ]),
                         ),
-                        const SizedBox(height: 14),
-                        const Divider(height: 1),
-                        const SizedBox(height: 14),
-                        Row(children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8)),
-                            child: const Icon(Icons.phone,
-                                size: 18, color: Colors.green),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                    isMalay
-                                        ? 'Nombor Telefon'
-                                        : 'Phone Number',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textGrey)),
-                                _isLoadingPhone
-                                    ? const SizedBox(
-                                        width: 80,
-                                        height: 16,
-                                        child: LinearProgressIndicator())
-                                    : Text(
-                                        widget.isLoggedIn
-                                            ? (_formatPhoneDisplay(
-                                                        _posterPhone)
-                                                    .isEmpty
-                                                ? (isMalay
-                                                    ? 'Tidak tersedia'
-                                                    : 'Not available')
-                                                : _formatPhoneDisplay(
-                                                    _posterPhone))
-                                            : '••••••••••',
-                                        style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w600,
-                                            color: widget.isLoggedIn
-                                                ? AppColors.textDark
-                                                : AppColors.textGrey),
-                                      ),
-                              ]),
-                          if (!widget.isLoggedIn) ...[
-                            const Spacer(),
-                            TextButton(
-                              onPressed: () => widget.onLoginRequired(
-                                  isMalay
-                                      ? 'melihat nombor telefon'
-                                      : 'view phone number'),
-                              child: Text(
-                                  isMalay
-                                      ? 'Login untuk lihat'
-                                      : 'Login to view',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.primaryBlue)),
-                            ),
-                          ],
-                        ]),
-                        const SizedBox(height: 12),
+
                         Row(children: [
                           Container(
                             padding: const EdgeInsets.all(8),
