@@ -2648,51 +2648,29 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
             ),
             const SizedBox(height: 10),
             // Tukar Helper + Tolak Helper side by side
-            Row(children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isActionLoading
-                      ? null
-                      : () => _resetToOpen(isMalay),
-                  icon: const Icon(Icons.refresh,
-                      color: Colors.orange, size: 16),
-                  label: Text(
-                      isMalay ? 'Tukar Helper' : 'Change Helper',
-                      style: const TextStyle(
-                          color: Colors.orange, fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.orange),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _isActionLoading
+                    ? null
+                    : () => _ownerCancelHelper(
+                          isMalay,
+                          _bantuan.helperUid ?? '',
+                          _bantuan.helperName ?? '',
+                        ),
+                icon: const Icon(Icons.person_remove_outlined,
+                    color: Colors.red, size: 16),
+                label: Text(
+                    isMalay ? 'Tolak & Tukar Helper' : 'Reject & Change Helper',
+                    style: const TextStyle(color: Colors.red, fontSize: 13)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _isActionLoading
-                      ? null
-                      : () => _ownerCancelHelper(
-                            isMalay,
-                            _bantuan.helperUid ?? '',
-                            _bantuan.helperName ?? '',
-                          ),
-                  icon: const Icon(Icons.person_remove_outlined,
-                      color: Colors.red, size: 16),
-                  label: Text(
-                      isMalay ? 'Tolak Helper' : 'Reject Helper',
-                      style: const TextStyle(
-                          color: Colors.red, fontSize: 12)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.red),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ),
-            ]),
+            ),
           ]);
         }
       }

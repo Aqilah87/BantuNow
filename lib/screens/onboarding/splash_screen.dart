@@ -29,7 +29,19 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final firebaseUser = FirebaseAuth.instance.currentUser;
 
-    // Refresh Google session kalau user dah login
+    // Check onboarding DULU — sebelum check login
+    final shouldShow = await _shouldShowOnboarding();
+    if (!mounted) return;
+
+    if (shouldShow) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+      );
+      return;
+    }
+
+    // Onboarding dah lepas — refresh Google session kalau perlu
     if (firebaseUser != null) {
       try {
         final googleSignIn = GoogleSignIn();
@@ -46,42 +58,40 @@ class _SplashScreenState extends State<SplashScreen> {
     }
 
     if (!mounted) return;
-
-    // Check onboarding — untuk SEMUA user tanpa mengira login status
-    final shouldShow = await _shouldShowOnboarding();
-    if (!mounted) return;
-
-    if (shouldShow) {
-      // First install atau version baru → Onboarding → Select Location → Home
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-      );
-    } else {
-      // User lama, version sama → terus Home
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainScreen()),
-      );
-    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const MainScreen()),
+    );
   }
 
   Future<bool> _shouldShowOnboarding() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final info = await PackageInfo.fromPlatform();
-      final currentVersion = info.version; // contoh: "1.0.0"
-
+      final currentVersion = info.version;
       final savedVersion = prefs.getString('onboarding_version');
 
+      // Guna Firebase metadata untuk detect first install
+      // creationTime akan reset bila uninstall dan install semula
+      final firebaseUser = FirebaseAuth.instance.currentUser;
+      if (firebaseUser == null) {
+        // User tak login — check version je
+        if (savedVersion != currentVersion) {
+          await prefs.setString('onboarding_version', currentVersion);
+          return true;
+        }
+        return false;
+      }
+
+      // User login — check bila account dicipta vs onboarding version
       if (savedVersion != currentVersion) {
-        // Version baru atau first install — tunjuk onboarding
         await prefs.setString('onboarding_version', currentVersion);
         return true;
       }
+
       return false;
     } catch (_) {
-      return true; // Kalau error, tunjuk onboarding je
+      return true;
     }
   }
 

@@ -55,22 +55,52 @@ class _RatingDialogState extends State<RatingDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Star rating
+          // Star rating — half star support
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(5, (index) {
+              final fullStar = index + 1.0;
+              final halfStar = index + 0.5;
               return GestureDetector(
-                onTap: () => setState(() => _rating = index + 1.0),
-                child: Icon(
-                  index < _rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                  color: Colors.amber,
-                  size: 40,
+                onTap: () {
+                  // Tap kanan = full star, tap kiri = half star
+                },
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: GestureDetector(
+                    onTapDown: (details) {
+                      final isLeftHalf =
+                          details.localPosition.dx < 22;
+                      setState(() {
+                        _rating = isLeftHalf ? halfStar : fullStar;
+                      });
+                    },
+                    child: _rating >= fullStar
+                        ? const Icon(Icons.star_rounded,
+                            color: Colors.amber, size: 40)
+                        : _rating >= halfStar
+                            ? const Icon(Icons.star_half_rounded,
+                                color: Colors.amber, size: 40)
+                            : const Icon(Icons.star_outline_rounded,
+                                color: Colors.amber, size: 40),
+                  ),
                 ),
               );
             }),
           ),
-          const SizedBox(height: 8),
-          Text(
-            _getRatingLabel(),
+
+            const SizedBox(height: 8),
+            Text(
+              _rating.toString().endsWith('.0')
+                  ? '${_rating.toInt()} ⭐'
+                  : '$_rating ⭐',
+              style: const TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _getRatingLabel(),
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -125,25 +155,25 @@ class _RatingDialogState extends State<RatingDialog> {
   }
 
   String _getRatingLabel() {
-    switch (_rating.toInt()) {
-      case 1: return widget.isMalay ? 'Sangat Buruk 😞' : 'Very Poor 😞';
-      case 2: return widget.isMalay ? 'Kurang Baik 😕' : 'Poor 😕';
-      case 3: return widget.isMalay ? 'Okay 😐' : 'Okay 😐';
-      case 4: return widget.isMalay ? 'Baik 😊' : 'Good 😊';
-      case 5: return widget.isMalay ? 'Sangat Baik 🌟' : 'Excellent 🌟';
-      default: return '';
-    }
+    if (_rating == 0.5) return widget.isMalay ? 'Sangat Buruk 😞' : 'Very Poor 😞';
+    if (_rating == 1.0) return widget.isMalay ? 'Sangat Buruk 😞' : 'Very Poor 😞';
+    if (_rating == 1.5) return widget.isMalay ? 'Buruk 😟' : 'Poor 😟';
+    if (_rating == 2.0) return widget.isMalay ? 'Kurang Baik 😕' : 'Below Average 😕';
+    if (_rating == 2.5) return widget.isMalay ? 'Kurang Memuaskan 😐' : 'Fair 😐';
+    if (_rating == 3.0) return widget.isMalay ? 'Okay 😐' : 'Okay 😐';
+    if (_rating == 3.5) return widget.isMalay ? 'Agak Baik 🙂' : 'Above Average 🙂';
+    if (_rating == 4.0) return widget.isMalay ? 'Baik 😊' : 'Good 😊';
+    if (_rating == 4.5) return widget.isMalay ? 'Sangat Baik 😄' : 'Very Good 😄';
+    if (_rating == 5.0) return widget.isMalay ? 'Cemerlang 🌟' : 'Excellent 🌟';
+    return '';
   }
 
   Color _getRatingColor() {
-    switch (_rating.toInt()) {
-      case 1: return Colors.red;
-      case 2: return Colors.orange;
-      case 3: return Colors.amber;
-      case 4: return Colors.lightGreen;
-      case 5: return Colors.green;
-      default: return Colors.grey;
-    }
+    if (_rating <= 1.0) return Colors.red;
+    if (_rating <= 2.0) return Colors.deepOrange;
+    if (_rating <= 3.0) return Colors.amber;
+    if (_rating <= 4.0) return Colors.lightGreen;
+    return Colors.green;
   }
 
   Future<void> _submit() async {
