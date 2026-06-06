@@ -939,33 +939,114 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
   }
 
   // ─── OWNER CANCEL / REJECT HELPER ─────────────────────────────────
-
-  Future<void> _ownerCancelHelper(
+    Future<void> _ownerCancelHelper(
       bool isMalay, String helperUid, String helperName) async {
-    final confirm = await showDialog<bool>(
+    // ── Step 1: Pilih sebab ──────────────────────────────────────
+    final reasons = isMalay
+        ? ['Helper tidak sesuai', 'Sudah ada helper lain', 'Post dah tidak diperlukan', 'Lain-lain']
+        : ['Helper not suitable', 'Already have another helper', 'Post no longer needed', 'Other'];
+
+    String? selectedReason;
+    final reasonController = TextEditingController();
+
+    final reason = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(isMalay ? 'Tolak Helper Ini?' : 'Reject This Helper?'),
-        content: Text(isMalay
-            ? '"$helperName" akan dibuang dan post dibuka semula untuk helper lain.'
-            : '"$helperName" will be removed and the post reopened for others.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(isMalay ? 'Batal' : 'Cancel',
-                  style: TextStyle(color: AppColors.textGrey))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(isMalay ? 'Ya, Tolak' : 'Yes, Reject',
-                style: const TextStyle(color: Colors.white)),
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(children: [
+            const Icon(Icons.person_remove_outlined, color: Colors.red, size: 22),
+            const SizedBox(width: 8),
+            Expanded(child: Text(
+              isMalay ? 'Sebab Tolak "$helperName"?' : 'Reason to Reject "$helperName"?',
+              style: const TextStyle(fontSize: 15),
+            )),
+          ]),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isMalay
+                      ? 'Sila pilih sebab anda menolak helper ini:'
+                      : 'Please select your reason for rejecting:',
+                  style: TextStyle(fontSize: 13, color: AppColors.textGrey),
+                ),
+                const SizedBox(height: 12),
+                ...reasons.map((r) => GestureDetector(
+                  onTap: () => setDialogState(() => selectedReason = r),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: selectedReason == r
+                          ? Colors.red.withOpacity(0.08)
+                          : Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: selectedReason == r ? Colors.red : Colors.grey.shade200,
+                        width: selectedReason == r ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(children: [
+                      Icon(
+                        selectedReason == r
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                        size: 18,
+                        color: selectedReason == r ? Colors.red : Colors.grey,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(r, style: TextStyle(
+                        fontSize: 13,
+                        color: selectedReason == r ? Colors.red : AppColors.textDark,
+                        fontWeight: selectedReason == r ? FontWeight.w600 : FontWeight.normal,
+                      )),
+                    ]),
+                  ),
+                )),
+                if (selectedReason == reasons.last) ...[
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: reasonController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: isMalay ? 'Nyatakan sebab...' : 'State your reason...',
+                      hintStyle: TextStyle(fontSize: 12, color: AppColors.textGrey),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.all(10),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: Text(isMalay ? 'Batal' : 'Cancel',
+                  style: TextStyle(color: AppColors.textGrey)),
+            ),
+            ElevatedButton(
+              onPressed: selectedReason == null
+                  ? null
+                  : () {
+                      final finalReason = selectedReason == reasons.last && reasonController.text.isNotEmpty
+                          ? reasonController.text.trim()
+                          : selectedReason!;
+                      Navigator.pop(ctx, finalReason);
+                    },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: Text(isMalay ? 'Ya, Tolak' : 'Yes, Reject',
+                  style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
-    if (confirm != true) return;
+    if (reason == null) return;
 
     setState(() => _isActionLoading = true);
     try {
@@ -975,6 +1056,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         helperName: helperName,
         isMultiple: _bantuan.isMultipleSlot,
         isIndividual: !_isGroupCompletion,
+        reason: reason,
       );
       if (result['success'] == true) {
         await _refreshBantuan();
@@ -1003,32 +1085,111 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
   }
 
   // ─── HELPER WITHDRAW ──────────────────────────────────────────────
+    Future<void> _helperWithdraw(bool isMalay) async {
+    // ── Step 1: Pilih sebab ──────────────────────────────────────
+    final reasons = isMalay
+        ? ['Tidak sengaja tertekan', 'Dah tak available', 'Ada hal kecemasan', 'Lain-lain']
+        : ['Accidentally pressed', 'No longer available', 'Emergency came up', 'Other'];
 
-  Future<void> _helperWithdraw(bool isMalay) async {
-    final confirm = await showDialog<bool>(
+    String? selectedReason;
+    final reasonController = TextEditingController();
+
+    final reason = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(isMalay ? 'Tarik Diri?' : 'Withdraw?'),
-        content: Text(isMalay
-            ? 'Anda akan dikeluarkan dari post ini. Post akan aktif semula untuk orang lain.'
-            : 'You will be removed from this post. It will be reopened for others.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(isMalay ? 'Batal' : 'Cancel',
-                  style: TextStyle(color: AppColors.textGrey))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(isMalay ? 'Ya, Tarik Diri' : 'Yes, Withdraw',
-                style: const TextStyle(color: Colors.white)),
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(children: [
+            const Icon(Icons.exit_to_app, color: Colors.red, size: 22),
+            const SizedBox(width: 8),
+            Text(isMalay ? 'Sebab Tarik Diri?' : 'Reason to Withdraw?'),
+          ]),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isMalay
+                      ? 'Sila pilih sebab anda tarik diri:'
+                      : 'Please select your reason:',
+                  style: TextStyle(fontSize: 13, color: AppColors.textGrey),
+                ),
+                const SizedBox(height: 12),
+                ...reasons.map((r) => GestureDetector(
+                  onTap: () => setDialogState(() => selectedReason = r),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: selectedReason == r
+                          ? Colors.red.withOpacity(0.08)
+                          : Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: selectedReason == r ? Colors.red : Colors.grey.shade200,
+                        width: selectedReason == r ? 1.5 : 1,
+                      ),
+                    ),
+                    child: Row(children: [
+                      Icon(
+                        selectedReason == r
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                        size: 18,
+                        color: selectedReason == r ? Colors.red : Colors.grey,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(r, style: TextStyle(
+                        fontSize: 13,
+                        color: selectedReason == r ? Colors.red : AppColors.textDark,
+                        fontWeight: selectedReason == r ? FontWeight.w600 : FontWeight.normal,
+                      )),
+                    ]),
+                  ),
+                )),
+                // Text field untuk "Lain-lain"
+                if (selectedReason == reasons.last) ...[
+                  const SizedBox(height: 4),
+                  TextField(
+                    controller: reasonController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: isMalay ? 'Nyatakan sebab...' : 'State your reason...',
+                      hintStyle: TextStyle(fontSize: 12, color: AppColors.textGrey),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.all(10),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: Text(isMalay ? 'Batal' : 'Cancel',
+                  style: TextStyle(color: AppColors.textGrey)),
+            ),
+            ElevatedButton(
+              onPressed: selectedReason == null
+                  ? null
+                  : () {
+                      final finalReason = selectedReason == reasons.last && reasonController.text.isNotEmpty
+                          ? reasonController.text.trim()
+                          : selectedReason!;
+                      Navigator.pop(ctx, finalReason);
+                    },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: Text(isMalay ? 'Ya, Tarik Diri' : 'Yes, Withdraw',
+                  style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
-    if (confirm != true) return;
+    if (reason == null) return;
 
     setState(() => _isActionLoading = true);
     try {
@@ -1050,6 +1211,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         helperName: helperName,
         isMultiple: _bantuan.isMultipleSlot,
         isIndividual: !_isGroupCompletion,
+        reason: reason,
       );
 
       if (result['success'] == true) {
@@ -1110,8 +1272,10 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-      body: CustomScrollView(
-        slivers: [
+          body: RefreshIndicator(
+          onRefresh: _refreshBantuan,
+          child: CustomScrollView(
+            slivers: [
           SliverAppBar(
             expandedHeight: bantuan.imageUrl != null ? 280 : 120,
             pinned: true,
@@ -1604,147 +1768,8 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
 
                   const SizedBox(height: 16),
 
-                  // ── User info card ─────────────────────────────────
-                  _buildCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildCardTitle(
-                            isMalay ? 'Maklumat Pengguna' : 'User Info',
-                            Icons.person_outline),
-                        const SizedBox(height: 14),
-                        GestureDetector(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => UserProfileScreen(
-                                userUid: bantuan.postedByUid,
-                                userName: bantuan.postedBy,
-                              ),
-                            ),
-                          ),
-                          child: Row(children: [
-                            CircleAvatar(
-                              radius: 24,
-                              backgroundColor: AppColors.backgroundBlue,
-                              child: Text(
-                                bantuan.postedBy.isNotEmpty
-                                    ? bantuan.postedBy[0].toUpperCase()
-                                    : 'U',
-                                style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.primaryBlue),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(bantuan.postedBy,
-                                        style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.textDark)),
-                                    const SizedBox(height: 3),
-                                    Text(bantuan.area,
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            color: AppColors.textGrey)),
-                                    const SizedBox(height: 4),
-                                    // ── Rating poster ──────────────
-                                    FutureBuilder<DocumentSnapshot>(
-                                      future: FirebaseFirestore.instance
-                                          .collection('users')
-                                          .doc(bantuan.postedByUid)
-                                          .get(),
-                                      builder: (ctx, snap) {
-                                        final data = snap.hasData &&
-                                                snap.data!.exists
-                                            ? snap.data!.data()
-                                                as Map<String, dynamic>
-                                            : null;
-                                        final avg = (data?['rating']
-                                                    as num?)
-                                                ?.toDouble() ??
-                                            0.0;
-                                        final count = (data?[
-                                                    'rating_count']
-                                                as num?)
-                                            ?.toInt() ?? 0;
-                                        if (count == 0) {
-                                          return Text(
-                                            'Belum ada rating',
-                                            style: TextStyle(
-                                                fontSize: 11,
-                                                color: AppColors.textGrey),
-                                          );
-                                        }
-                                        return Row(
-                                            mainAxisSize:
-                                                MainAxisSize.min,
-                                            children: [
-                                              const Icon(
-                                                  Icons.star_rounded,
-                                                  color: Colors.amber,
-                                                  size: 14),
-                                              const SizedBox(width: 3),
-                                              Text(
-                                                avg.toStringAsFixed(1),
-                                                style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight:
-                                                        FontWeight.bold,
-                                                    color:
-                                                        AppColors.textDark),
-                                              ),
-                                              const SizedBox(width: 3),
-                                              Text(
-                                                '($count ulasan)',
-                                                style: TextStyle(
-                                                    fontSize: 11,
-                                                    color:
-                                                        AppColors.textGrey),
-                                              ),
-                                            ]);
-                                      },
-                                    ),
-                                  ]),
-                            ),
-                            Icon(Icons.chevron_right,
-                                color: AppColors.textGrey, size: 20),
-                          ]),
-                        ),
-
-                        Row(children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                                color: AppColors.backgroundBlue,
-                                borderRadius: BorderRadius.circular(8)),
-                            child: Icon(Icons.location_on,
-                                size: 18, color: AppColors.primaryBlue),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(isMalay ? 'Kawasan' : 'Location',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textGrey)),
-                                Text(bantuan.area,
-                                    style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textDark)),
-                              ]),
-                        ]),
-                      ],
-                    ),
-                  ),
+                  // ── User info card ─────────────────────────────────────────────
+                  _buildUserInfoCard(bantuan, isMalay),
 
                   const SizedBox(height: 24),
 
@@ -1813,9 +1838,216 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
             ),
           ),
         ],
+        ), // CustomScrollView
+      ), // RefreshIndicator
+    ); // Scaffold
+  }
+
+  // ─── USER INFO CARD ──────────────────────────────────────────────
+  // Owner tengok → tunjuk helper info
+  // Orang lain tengok → tunjuk owner info
+
+  Widget _buildUserInfoCard(BantuanModel bantuan, bool isMalay) {
+    // CASE 1: Owner tengok, multiple slot, ada helpers
+    if (_isOwner && bantuan.isMultipleSlot && bantuan.helperUids.isNotEmpty) {
+      return _buildCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildCardTitle(
+              isMalay ? 'Maklumat Helper' : 'Helper Info',
+              Icons.people_alt_outlined,
+            ),
+            const SizedBox(height: 14),
+            ...bantuan.helperUids.asMap().entries.map((entry) {
+              final index = entry.key;
+              final uid = entry.value;
+              final name = index < bantuan.helperNames.length
+                  ? bantuan.helperNames[index]
+                  : 'Helper ${index + 1}';
+              return Column(
+                children: [
+                  if (index > 0) const Divider(height: 20),
+                  _buildSingleUserTile(uid: uid, name: name, isMalay: isMalay),
+                ],
+              );
+            }),
+          ],
+        ),
+      );
+    }
+
+    // CASE 2: Owner tengok, single slot, ada helper
+    if (_isOwner &&
+        !bantuan.isMultipleSlot &&
+        bantuan.helperUid != null &&
+        bantuan.helperUid!.isNotEmpty) {
+      return _buildCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildCardTitle(
+              isMalay ? 'Maklumat Helper' : 'Helper Info',
+              Icons.person_outline,
+            ),
+            const SizedBox(height: 14),
+            _buildSingleUserTile(
+              uid: bantuan.helperUid!,
+              name: bantuan.helperName ?? 'Helper',
+              isMalay: isMalay,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // CASE 3: Owner belum ada helper, atau orang lain tengok → tunjuk owner
+    return _buildCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildCardTitle(
+            isMalay ? 'Maklumat Pengguna' : 'User Info',
+            Icons.person_outline,
+          ),
+          const SizedBox(height: 14),
+          _buildSingleUserTile(
+            uid: bantuan.postedByUid,
+            name: bantuan.postedBy,
+            isMalay: isMalay,
+            area: bantuan.area,
+            showArea: true,
+          ),
+        ],
       ),
     );
   }
+
+  // ─── SINGLE USER TILE ─────────────────────────────────────────────
+  // Reusable tile — nama, rating, kawasan
+
+  Widget _buildSingleUserTile({
+    required String uid,
+    required String name,
+    required bool isMalay,
+    String? area,
+    bool showArea = false,
+  }) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('users').doc(uid).get(),
+      builder: (ctx, snap) {
+        final data = snap.hasData && snap.data!.exists
+            ? snap.data!.data() as Map<String, dynamic>
+            : null;
+        final avgRating = (data?['rating'] as num?)?.toDouble() ?? 0.0;
+        final ratingCount = (data?['rating_count'] as num?)?.toInt() ?? 0;
+        final userArea = data?['area_name'] as String? ??
+            data?['area'] as String? ??
+            area ?? '';
+
+        return GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => UserProfileScreen(userUid: uid, userName: name),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: AppColors.backgroundBlue,
+                  backgroundImage: data?['photo_url'] != null
+                      ? NetworkImage(data!['photo_url'] as String)
+                      : null,
+                  child: data?['photo_url'] == null
+                      ? Text(
+                          name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primaryBlue),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textDark)),
+                      const SizedBox(height: 3),
+                      ratingCount > 0
+                          ? Row(mainAxisSize: MainAxisSize.min, children: [
+                              const Icon(Icons.star_rounded,
+                                  color: Colors.amber, size: 14),
+                              const SizedBox(width: 3),
+                              Text(avgRating.toStringAsFixed(1),
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textDark)),
+                              const SizedBox(width: 3),
+                              Text(
+                                  '($ratingCount ${isMalay ? 'ulasan' : 'reviews'})',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textGrey)),
+                            ])
+                          : Text(
+                              isMalay ? 'Belum ada rating' : 'No rating yet',
+                              style: TextStyle(
+                                  fontSize: 11, color: AppColors.textGrey)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+              ]),
+              if (userArea.isNotEmpty || showArea) ...[
+                const SizedBox(height: 14),
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                        color: AppColors.backgroundBlue,
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Icon(Icons.location_on,
+                        size: 18, color: AppColors.primaryBlue),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(isMalay ? 'Kawasan' : 'Location',
+                          style: TextStyle(
+                              fontSize: 12, color: AppColors.textGrey)),
+                      Text(
+                        userArea.isNotEmpty
+                            ? userArea
+                            : (isMalay ? 'Tidak ditetapkan' : 'Not set'),
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textDark),
+                      ),
+                    ],
+                  ),
+                ]),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ─── ACTION BUTTONS ────────────────────────────────────────────────
 
   // ─── SLOT PROGRESS BANNER ─────────────────────────────────────────
 

@@ -29,9 +29,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final firebaseUser = FirebaseAuth.instance.currentUser;
 
-    // Kalau user dah login — terus ke MainScreen, langkau semua check
+    // Refresh Google session kalau user dah login
     if (firebaseUser != null) {
-      // Refresh Google session kalau login guna Google
       try {
         final googleSignIn = GoogleSignIn();
         final googleUser = await googleSignIn.signInSilently();
@@ -44,26 +43,22 @@ class _SplashScreenState extends State<SplashScreen> {
           await FirebaseAuth.instance.signInWithCredential(credential);
         }
       } catch (_) {}
-
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainScreen()),
-      );
-      return; // ← stop kat sini, tak perlu check onboarding
     }
 
-    // User belum login — check onboarding
     if (!mounted) return;
+
+    // Check onboarding — untuk SEMUA user tanpa mengira login status
     final shouldShow = await _shouldShowOnboarding();
     if (!mounted) return;
 
     if (shouldShow) {
+      // First install atau version baru → Onboarding → Select Location → Home
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const OnboardingScreen()),
       );
     } else {
+      // User lama, version sama → terus Home
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const MainScreen()),

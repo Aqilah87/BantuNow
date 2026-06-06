@@ -162,7 +162,14 @@ class _ChatScreenState extends State<ChatScreen> {
           // ── Context banner (post yang dibincangkan) ────────────────
           _buildContextBanner(),
           // ── Messages list ──────────────────────────────────────────
-          Expanded(child: _buildMessagesList()),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                await _chatService.markAsRead(widget.conversationId);
+              },
+              child: _buildMessagesList(),
+            ),
+          ),
           // ── Input area ─────────────────────────────────────────────
           _buildInputArea(),
         ],

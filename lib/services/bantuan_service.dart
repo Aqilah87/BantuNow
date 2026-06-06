@@ -298,13 +298,15 @@ class BantuanService {
   //   → accepted_slots - 1
   //   → status balik 'open' (walaupun sebelum ni 'full')
 
-  Future<Map<String, dynamic>> ownerCancelHelper({
-    required String postId,
-    required String helperUid,
-    required String helperName,
-    required bool isMultiple,
-    bool isIndividual = true,
-  }) async {
+    Future<Map<String, dynamic>> ownerCancelHelper({
+      required String postId,
+      required String helperUid,
+      required String helperName,
+      required bool isMultiple,
+      bool isIndividual = true,
+      String? reason,
+    }) async {
+
     try {
       if (isMultiple) {
         final doc =
@@ -331,6 +333,9 @@ class BantuanService {
           updateData['helper_confirmations.$helperUid'] =
               FieldValue.delete();
         }
+        if (reason != null) {
+          updateData['last_action_reason'] = reason;
+        }
 
         await _firestore
             .collection(_collection)
@@ -344,6 +349,7 @@ class BantuanService {
           'helper_name': FieldValue.delete(),
           'helper_confirmed': false,
           'helper_confirmed_at': FieldValue.delete(),
+          if (reason != null) 'last_action_reason': reason,
         });
       }
       return {'success': true};
@@ -363,6 +369,7 @@ class BantuanService {
     required String helperName,
     required bool isMultiple,
     bool isIndividual = true,
+    String? reason,
   }) async {
     return ownerCancelHelper(
       postId: postId,
@@ -370,6 +377,7 @@ class BantuanService {
       helperName: helperName,
       isMultiple: isMultiple,
       isIndividual: isIndividual,
+      reason: reason,
     );
   }
 }

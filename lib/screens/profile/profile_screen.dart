@@ -310,9 +310,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
+              body: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : RefreshIndicator(
+                  onRefresh: () => _loadUserData(),
+                  child: SingleChildScrollView(
               child: Column(
                 children: [
                   // ── Header ──────────────────────────────────────────
@@ -748,8 +750,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ],
-              ),
-            ),
+                ),
+          ),
+        ),
     );
   }
 

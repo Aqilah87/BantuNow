@@ -87,11 +87,11 @@ class BantuanProvider extends ChangeNotifier {
         if (gps != null) {
         _gpsDetected = true;
 
-        // Guna GPS HANYA kalau user belum pilih kawasan manual
-        if (_userAreaId.isEmpty || _gpsFromAuto) {
-          _userLat = gps.latitude;
-          _userLon = gps.longitude;
-        }
+        // Sentiasa simpan GPS coordinates untuk Nearest/Best Match
+        _userLat = gps.latitude;
+        _userLon = gps.longitude;
+
+        // Guna GPS untuk kawasan HANYA kalau user belum pilih kawasan manual
 
         // Auto-set kawasan terdekat HANYA kalau user belum pilih kawasan
         if (_userAreaId.isEmpty) {

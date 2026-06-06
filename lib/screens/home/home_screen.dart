@@ -1424,9 +1424,19 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
+          border: Border(
+            left: BorderSide(
+              color: isRequest
+                  ? Colors.orange.shade400
+                  : Colors.green.shade400,
+              width: 5,
+            ),
+          ),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: isRequest
+                    ? Colors.orange.withOpacity(0.08)
+                    : Colors.green.withOpacity(0.08),
                 blurRadius: 8,
                 offset: const Offset(0, 2))
           ],
@@ -1482,8 +1492,66 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ]),
-                  const SizedBox(height: 10),
-                  Text(bantuan.title,
+                      const SizedBox(height: 10),
+                      // ── Slot badge ─────────────────────────────────
+                      if (bantuan.isMultipleSlot)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: Colors.purple.withOpacity(0.3)),
+                              ),
+                              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                const Icon(Icons.people_alt_outlined,
+                                    size: 12, color: Colors.purple),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${bantuan.acceptedSlots}/${bantuan.totalSlots} slot',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.purple),
+                                ),
+                              ]),
+                            ),
+                          ]),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: Colors.blue.withOpacity(0.3)),
+                              ),
+                              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                                Icon(Icons.person_outline,
+                                    size: 12, color: Colors.blue),
+                                SizedBox(width: 4),
+                                Text(
+                                  '1 slot',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue),
+                                ),
+                              ]),
+                            ),
+                          ]),
+                        ),
+                      Text(bantuan.title,
+                      
                       style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,

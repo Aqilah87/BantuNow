@@ -183,11 +183,16 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
 
               // ── Post list ────────────────────────────────────────────────
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: posts.length,
-                  itemBuilder: (context, index) =>
-                      _buildPostCard(context, posts[index]),
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    await _bantuanService.checkAndAutoClose();
+                  },
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: posts.length,
+                    itemBuilder: (context, index) =>
+                        _buildPostCard(context, posts[index]),
+                  ),
                 ),
               ),
             ],
