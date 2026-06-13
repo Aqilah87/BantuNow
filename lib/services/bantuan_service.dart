@@ -328,10 +328,10 @@ class BantuanService {
           'status': 'open',
         };
 
-        // Buang entry confirmation kalau ada (individual type)
+        // Buang entry confirmation — guna null instead of delete
+        // FieldValue.delete() pada dot notation tak work untuk non-owner
         if (isIndividual) {
-          updateData['helper_confirmations.$helperUid'] =
-              FieldValue.delete();
+          updateData['helper_confirmations.$helperUid'] = null;
         }
         if (reason != null) {
           updateData['last_action_reason'] = reason;

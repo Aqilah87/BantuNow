@@ -16,8 +16,9 @@ class MyPostsScreen extends StatefulWidget {
   State<MyPostsScreen> createState() => _MyPostsScreenState();
 }
 
-class _MyPostsScreenState extends State<MyPostsScreen> {
+  class _MyPostsScreenState extends State<MyPostsScreen> {
   final _bantuanService = BantuanService();
+  String _selectedFilter = 'all'; 
 
   @override
   void initState() {
@@ -166,17 +167,13 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                 child: Row(
                   children: [
-                    _buildStatChip(
-                        '${posts.length}', 'Total', Colors.white),
+                    _buildStatChip('${posts.length}', 'Total', Colors.white, 'all'),
                     const SizedBox(width: 8),
-                    _buildStatChip(
-                        '$activePosts', 'Active', Colors.green.shade300),
+                    _buildStatChip('$activePosts', 'Active', Colors.green.shade300, 'open'),
                     const SizedBox(width: 8),
-                    _buildStatChip('$inProgressPosts', 'In Progress',
-                        Colors.orange.shade300),
+                    _buildStatChip('$inProgressPosts', 'In Progress', Colors.orange.shade300, 'in_progress'),
                     const SizedBox(width: 8),
-                    _buildStatChip('$completedPosts', 'Done',
-                        Colors.grey.shade300),
+                    _buildStatChip('$completedPosts', 'Done', Colors.grey.shade300, 'closed'),
                   ],
                 ),
               ),
@@ -187,12 +184,18 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
                   onRefresh: () async {
                     await _bantuanService.checkAndAutoClose();
                   },
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: posts.length,
-                    itemBuilder: (context, index) =>
-                        _buildPostCard(context, posts[index]),
-                  ),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _selectedFilter == 'all'
+                      ? posts.length
+                      : posts.where((p) => p.status == _selectedFilter).length,
+                  itemBuilder: (context, index) {
+                    final filtered = _selectedFilter == 'all'
+                        ? posts
+                        : posts.where((p) => p.status == _selectedFilter).toList();
+                    return _buildPostCard(context, filtered[index]);
+                  },
+                ),
                 ),
               ),
             ],
@@ -202,26 +205,37 @@ class _MyPostsScreenState extends State<MyPostsScreen> {
     );
   }
 
-  Widget _buildStatChip(String count, String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(count,
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: color)),
-          const SizedBox(width: 5),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 11, color: Colors.white70)),
-        ],
+  Widget _buildStatChip(String count, String label, Color color, String filter) {
+    final isSelected = _selectedFilter == filter;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedFilter = filter),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.white.withOpacity(0.35)
+              : Colors.white.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? Colors.white : Colors.transparent,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(count,
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: color)),
+            const SizedBox(width: 5),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 11, color: Colors.white70)),
+          ],
+        ),
       ),
     );
   }

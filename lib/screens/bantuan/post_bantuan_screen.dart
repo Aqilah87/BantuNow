@@ -52,11 +52,12 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
   String _selectedCompletionType = 'individual';
   // Track sama ada user dah manually override atau masih ikut auto-set
   bool _userOverrideOfferType = false;
+  bool _userOverrideCompletionType = false;
 
   bool get _isEditMode => widget.existingPost != null;
   bool get _hasPinLocation => _pinLat != null && _pinLon != null;
-  // Slot section hanya relevan untuk type == 'offer'
-  bool get _showSlotSection => _selectedType == 'offer';
+  /// Slot section relevan untuk KEDUA-DUA offer DAN request
+  bool get _showSlotSection => true;
 
   @override
   void initState() {
@@ -87,7 +88,10 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
     if (post.totalSlots != null) {
       _slotsController.text = post.totalSlots.toString();
     }
+  // After
+    _selectedCompletionType = post.completionType;
     _userOverrideOfferType = true; // edit mode = treat as manual
+    _userOverrideCompletionType = true;
   }
 
   Future<void> _loadUserData() async {
@@ -106,7 +110,9 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
       // Hanya auto-set kalau user belum manually override
       if (!_userOverrideOfferType) {
         _offerType = BantuanCategories.getDefaultOfferType(newCat);
-        _selectedCompletionType = BantuanCategories.getDefaultCompletionType(newCat); // ← TAMBAH INI
+        if (!_userOverrideCompletionType) {
+          _selectedCompletionType = BantuanCategories.getDefaultCompletionType(newCat);
+        }
         // Reset slots ke default 10 bila auto-set ke multiple
         if (_offerType == 'multiple') {
           _slotsController.text = '10';
@@ -119,7 +125,8 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
   void _onOfferTypeChanged(String newType) {
     setState(() {
       _offerType = newType;
-      _userOverrideOfferType = true;
+      _userOverrideOfferType = true; // edit mode = treat as manual
+      _userOverrideCompletionType = true;
       if (newType == 'multiple' && _slotsController.text.isEmpty) {
         _slotsController.text = '10';
       }
@@ -290,8 +297,8 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
     }
 
     // Validate slot count kalau multiple
-    int? totalSlots;
-    if (_selectedType == 'offer' && _offerType == 'multiple') {
+      int? totalSlots;
+      if (_offerType == 'multiple') {
       final parsed = int.tryParse(_slotsController.text.trim());
       if (parsed == null || parsed < 2 || parsed > 100) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -330,14 +337,9 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
       }
     } catch (_) {}
 
-    // offerType hanya apply untuk type == 'offer'
-    // Untuk 'request', kita simpan 'single' sebagai default
-    final finalOfferType =
-        _selectedType == 'offer' ? _offerType : 'single';
-    final finalTotalSlots =
-        _selectedType == 'offer' && _offerType == 'multiple'
-            ? totalSlots
-            : null;
+    // offerType apply untuk KEDUA-DUA offer DAN request
+    final finalOfferType = _offerType;
+    final finalTotalSlots = _offerType == 'multiple' ? totalSlots : null;
 
     if (_isEditMode) {
       try {
@@ -356,6 +358,7 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
           'longitude': areaData?.longitude,
           'poster_availability': posterAvailability,
           'offer_type': finalOfferType,
+          'completion_type': _selectedCompletionType,
           if (finalTotalSlots != null) 'total_slots': finalTotalSlots,
           if (finalTotalSlots == null) 'total_slots': FieldValue.delete(),
           if (_pinLat != null) 'pin_lat': _pinLat,
@@ -1021,7 +1024,92 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
             isMalay ? 'Min: 2  •  Max: 100' : 'Min: 2  •  Max: 100',
             style: TextStyle(fontSize: 11, color: AppColors.textGrey),
           ),
+
+          const SizedBox(height: 16),
+          Text(
+            isMalay ? 'Cara Helpers Datang' : 'How Helpers Arrive',
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textDark),
+          ),
+          const SizedBox(height: 8),
+          Row(children: [
+            _buildCompletionTypeChip(
+              icon: Icons.groups_2,
+              label: isMalay ? 'Serentak' : 'Together',
+              sublabel: isMalay ? 'Owner je close' : 'Owner closes',
+              value: 'group',
+              isMalay: isMalay,
+            ),
+            const SizedBox(width: 12),
+            _buildCompletionTypeChip(
+              icon: Icons.person_pin_circle_outlined,
+              label: isMalay ? 'Satu-satu' : 'One by one',
+              sublabel: isMalay ? 'Tiap2 confirm' : 'Each confirms',
+              value: 'individual',
+              isMalay: isMalay,
+            ),
+          ]),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCompletionTypeChip({
+    required IconData icon,
+    required String label,
+    required String sublabel,
+    required String value,
+    required bool isMalay,
+  }) {
+    final isSelected = _selectedCompletionType == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _selectedCompletionType = value;
+          _userOverrideCompletionType = true;
+        }),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Colors.purple.withOpacity(0.08)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? Colors.purple : AppColors.lightGrey,
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Row(children: [
+            Icon(icon,
+                size: 16,
+                color: isSelected ? Colors.purple : AppColors.textGrey),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? Colors.purple
+                              : AppColors.textDark)),
+                  Text(sublabel,
+                      style: TextStyle(
+                          fontSize: 10,
+                          color: isSelected
+                              ? Colors.purple
+                              : AppColors.textGrey)),
+                ],
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }

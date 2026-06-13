@@ -1375,6 +1375,10 @@ class _HomeScreenState extends State<HomeScreen> {
       BantuanModel bantuan, bool isMalay, BantuanProvider provider) {
     final isRequest = bantuan.type == 'request';
     final typeColor = isRequest ? Colors.orange : Colors.green;
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    final isOwner = currentUid != null && bantuan.postedByUid == currentUid;
+    final cardBorderColor = isOwner ? Colors.purple.shade400 : Colors.cyan.shade400;
+    final cardShadowColor = isOwner ? Colors.purple : Colors.cyan;
     final typeLabel = isRequest
         ? (isMalay ? 'Minta Bantuan' : 'Request Help')
         : (isMalay ? 'Tawar Bantuan' : 'Offer Help');
@@ -1426,17 +1430,13 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(16),
           border: Border(
             left: BorderSide(
-              color: isRequest
-                  ? Colors.orange.shade400
-                  : Colors.green.shade400,
+              color: cardBorderColor,
               width: 5,
             ),
           ),
           boxShadow: [
             BoxShadow(
-                color: isRequest
-                    ? Colors.orange.withOpacity(0.08)
-                    : Colors.green.withOpacity(0.08),
+                color: cardShadowColor.withOpacity(0.08),
                 blurRadius: 8,
                 offset: const Offset(0, 2))
           ],
@@ -1649,21 +1649,27 @@ class _HomeScreenState extends State<HomeScreen> {
                                 (data?['rating'] as num?)?.toDouble() ?? 0.0;
                             final ratingCount =
                                 (data?['rating_count'] as num?)?.toInt() ?? 0;
-                            return Row(children: [
-                              CircleAvatar(
-                                radius: 14,
-                                backgroundColor:
-                                    AppColors.primaryBlue.withOpacity(0.12),
-                                child: Text(
-                                  bantuan.postedBy.isNotEmpty
-                                      ? bantuan.postedBy[0].toUpperCase()
-                                      : 'U',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.primaryBlue),
+                              final photoUrl = data?['photo_url'] as String?;
+                              return Row(children: [
+                                CircleAvatar(
+                                  radius: 14,
+                                  backgroundColor:
+                                      AppColors.primaryBlue.withOpacity(0.12),
+                                  backgroundImage: photoUrl != null
+                                      ? NetworkImage(photoUrl)
+                                      : null,
+                                  child: photoUrl == null
+                                      ? Text(
+                                          bantuan.postedBy.isNotEmpty
+                                              ? bantuan.postedBy[0].toUpperCase()
+                                              : 'U',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.primaryBlue),
+                                        )
+                                      : null,
                                 ),
-                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(

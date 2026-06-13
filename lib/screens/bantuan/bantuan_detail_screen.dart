@@ -548,7 +548,10 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           currentAccepted: _bantuan.acceptedSlots,
           totalSlots: _bantuan.totalSlots ?? 0,
           completionType: _bantuan.completionType,
-        );
+        ).timeout(const Duration(seconds: 10), onTimeout: () => {
+          'success': false,
+          'message': 'timeout',
+        });
 
         if (result['success'] == true) {
           await _refreshBantuan();
@@ -572,6 +575,7 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           final msg = result['message'] as String? ?? '';
           if (mounted) {
             String errorText;
+            // After
             if (msg == 'already_joined') {
               errorText = isMalay
                   ? 'Anda sudah mendaftar untuk slot ini.'
@@ -580,6 +584,10 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
               errorText = isMalay
                   ? 'Maaf, semua slot telah penuh.'
                   : 'Sorry, all slots are full.';
+            } else if (msg == 'timeout') {
+              errorText = isMalay
+                  ? '📡 Sambungan tidak stabil. Sila cuba lagi.'
+                  : '📡 Connection unstable. Please try again.';
             } else {
               errorText = 'Error: $msg';
             }
@@ -587,13 +595,17 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                 .showSnackBar(SnackBar(content: Text(errorText)));
           }
         }
-      } else {
-        // ── SINGLE LOGIC (offer single atau request) ─────────────
-        final result = await _bantuanService.acceptSingleHelp(
-          postId: _bantuan.id,
-          helperUid: user.uid,
-          helperName: helperName,
-        );
+
+        } else {
+          // ── SINGLE LOGIC (offer single atau request) ─────────────
+          final result = await _bantuanService.acceptSingleHelp(
+            postId: _bantuan.id,
+            helperUid: user.uid,
+            helperName: helperName,
+          ).timeout(const Duration(seconds: 10), onTimeout: () => {
+            'success': false,
+            'message': 'timeout',
+          });
 
         if (result['success'] == true) {
           await _refreshBantuan();
@@ -612,24 +624,31 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
                   isOffer ? AppColors.primaryBlue : Colors.orange,
             ));
           }
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Error: ${result['message']}')));
+
+          } else {
+            if (mounted) {
+              final msg = result['message'] as String? ?? '';
+              final errorText = msg == 'timeout'
+                  ? (isMalay
+                      ? '📡 Sambungan tidak stabil. Sila cuba lagi.'
+                      : '📡 Connection unstable. Please try again.')
+                  : 'Error: $msg';
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text(errorText)));
+            }
           }
         }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
+      } finally {
+        if (mounted) setState(() => _isActionLoading = false);
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isActionLoading = false);
     }
-  }
 
-  Future<void> _helperConfirmDone(bool isMalay) async {
+    Future<void> _helperConfirmDone(bool isMalay) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -661,8 +680,24 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         _bantuan.id,
         helperUid: _currentUid,
         isMultiple: _bantuan.isMultipleSlot,
-      );
-      if (result['success'] != true) throw result['message'];
+      ).timeout(const Duration(seconds: 10), onTimeout: () => {
+        'success': false,
+        'message': 'timeout',
+      });
+      if (result['success'] != true) {
+        final msg = result['message'];
+        if (msg == 'timeout') {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(isMalay
+                  ? '📡 Sambungan tidak stabil. Sila cuba lagi.'
+                  : '📡 Connection unstable. Please try again.'),
+            ));
+          }
+          return;
+        }
+        throw msg;
+      }
       await _refreshBantuan();
     } catch (e) {
       if (mounted) {
@@ -676,7 +711,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     if (!mounted) return;
 
     // Rating untuk single — untuk multiple, rating dilakukan bila owner tutup post
-    if (!_bantuan.isMultipleSlot) {
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -688,7 +722,6 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           isMalay: isMalay,
         ),
       );
-    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -804,12 +837,36 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         ],
       ),
     );
-    if (confirm != true) return;
+      // After
+      if (confirm != true) return;
 
-    setState(() => _isActionLoading = true);
-    try {
-      final result = await _bantuanService.closeBantuan(_bantuan.id);
-      if (result['success'] == true) {
+      for (final entry in _bantuan.helperUids.asMap().entries) {
+        final uid = entry.value;
+        final name = entry.key < _bantuan.helperNames.length
+            ? _bantuan.helperNames[entry.key]
+            : 'Helper ${entry.key + 1}';
+        if (!mounted) break;
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => RatingDialog(
+            bantuanId: _bantuan.id,
+            ratedUserUid: uid,
+            ratedUserName: name,
+            type: 'helper',
+            isMalay: isMalay,
+          ),
+        );
+      }
+
+        setState(() => _isActionLoading = true);
+        try {
+          final result = await _bantuanService.closeBantuan(_bantuan.id)
+              .timeout(const Duration(seconds: 10), onTimeout: () => {
+            'success': false,
+            'message': 'timeout',
+          });
+          if (result['success'] == true) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(isMalay
@@ -819,20 +876,32 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           ));
           Navigator.pop(context);
         }
-      } else {
-        throw result['message'];
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isActionLoading = false);
-    }
-  }
 
-  Future<void> _deletePost(bool isMalay) async {
+        } else {
+          final msg = result['message'];
+          if (msg == 'timeout') {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(isMalay
+                    ? '📡 Sambungan tidak stabil. Sila cuba lagi.'
+                    : '📡 Connection unstable. Please try again.'),
+              ));
+            }
+          } else {
+            throw msg;
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
+      } finally {
+        if (mounted) setState(() => _isActionLoading = false);
+      }
+    }
+
+    Future<void> _deletePost(bool isMalay) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1205,16 +1274,19 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         helperName = _bantuan.helperName ?? '';
       }
 
-      final result = await _bantuanService.helperWithdraw(
-        postId: _bantuan.id,
-        helperUid: helperUid,
-        helperName: helperName,
-        isMultiple: _bantuan.isMultipleSlot,
-        isIndividual: !_isGroupCompletion,
-        reason: reason,
-      );
+        final result = await _bantuanService.helperWithdraw(
+          postId: _bantuan.id,
+          helperUid: helperUid,
+          helperName: helperName,
+          isMultiple: _bantuan.isMultipleSlot,
+          isIndividual: !_isGroupCompletion,
+          reason: reason,
+        ).timeout(const Duration(seconds: 10), onTimeout: () => {
+          'success': false,
+          'message': 'timeout',
+        });
 
-      if (result['success'] == true) {
+        if (result['success'] == true) {
         await _refreshBantuan();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1224,23 +1296,30 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
             backgroundColor: Colors.grey.shade700,
           ));
         }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error: ${result['message']}')));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isActionLoading = false);
-    }
-  }
 
-  void _openFullMap(bool isMalay) {
+        } else {
+          if (mounted) {
+            final msg = result['message'] as String? ?? '';
+            final errorText = msg == 'timeout'
+                ? (isMalay
+                    ? '📡 Sambungan tidak stabil. Sila cuba lagi.'
+                    : '📡 Connection unstable. Please try again.')
+                : 'Error: $msg';
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text(errorText)));
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Error: $e')));
+        }
+      } finally {
+        if (mounted) setState(() => _isActionLoading = false);
+      }
+    }
+
+    void _openFullMap(bool isMalay) {
     Navigator.push(
       context,
       MaterialPageRoute(
