@@ -19,6 +19,8 @@ import '../map/map_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../chat/chat_screen.dart';        
 import '../../services/chat_service.dart';
+import '../../providers/connectivity_provider.dart';
+import '../../widgets/offline_view.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -348,26 +350,27 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.purple, size: 20),
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isMalay ? 'Criteria Best Match' : 'Best Match Criteria',
-                          style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textDark),
-                        ),
-                        Text(
-                          isMalay
-                              ? 'Tetapkan kriteria untuk ranking'
-                              : 'Set criteria for ranking',
-                          style: TextStyle(
-                              fontSize: 12, color: AppColors.textGrey),
-                        ),
-                      ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isMalay ? 'Criteria Best Match' : 'Best Match Criteria',
+                            style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textDark),
+                          ),
+                          Text(
+                            isMalay
+                                ? 'Tetapkan kriteria untuk ranking'
+                                : 'Set criteria for ranking',
+                            style: TextStyle(
+                                fontSize: 12, color: AppColors.textGrey),
+                          ),
+                        ],
+                      ),
                     ),
-                    const Spacer(),
                     TextButton(
                       onPressed: () => setSheetState(() {
                         tempCategories = {};
@@ -380,6 +383,19 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: Colors.red,
                               fontSize: 13,
                               fontWeight: FontWeight.w600)),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 4),
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.close,
+                            size: 16, color: AppColors.textGrey),
+                      ),
                     ),
                   ]),
                 ),
@@ -1224,11 +1240,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildBantuanList(bool isMalay, BantuanProvider provider) {
-    return StreamBuilder<List<BantuanModel>>(
-      stream: provider.bantuanStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+          Widget _buildBantuanList(bool isMalay, BantuanProvider provider) {
+          final isOffline = context.watch<ConnectivityProvider>().isOffline;
+          if (isOffline) {
+            return OfflineView(
+              isMalay: isMalay,
+              onRetry: () => context.read<ConnectivityProvider>().recheck(),
+            );
+          }
+          return StreamBuilder<List<BantuanModel>>(
+            stream: provider.bantuanStream,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
               padding: EdgeInsets.all(40),
               child: Center(child: CircularProgressIndicator()));

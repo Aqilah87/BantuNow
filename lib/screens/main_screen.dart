@@ -10,7 +10,6 @@ import 'profile/profile_screen.dart';
 import 'auth/login_screen.dart';
 import 'chat/conversation_list_screen.dart';
 import '../../services/chat_service.dart';
-import '../../widgets/connectivity_banner.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -130,9 +129,8 @@ class _MainScreenState extends State<MainScreen> {
       const ProfileScreen(),      // index 4
     ];
 
-        return ConnectivityBanner(
-          child: Scaffold(
-          body: IndexedStack(
+            return Scaffold(
+            body: IndexedStack(
             index: _currentIndex,
             children: screens,
           ),
@@ -249,9 +247,7 @@ class _MainScreenState extends State<MainScreen> {
               label: 'Profile',
             ),
           ],
-        ),
-// After
-        ),
+    ),
       ),
     );
       },

@@ -160,8 +160,30 @@ class BantuanProvider extends ChangeNotifier {
       list = list.where((p) => p.areaId == _userAreaId).toList();
     }
 
-    if (_selectedCategories.isNotEmpty && !_sortByRanking) {
+    // Hard filter category — apply SAMA ADA dalam mod biasa atau Best Match.
+    // Best Match guna criteria ni sebagai filter wajib, bukan sekadar ranking hint.
+    if (_selectedCategories.isNotEmpty) {
       list = list.where((p) => _selectedCategories.contains(p.category)).toList();
+    }
+
+    // Best Match: hard filter tambahan untuk radius, type, availability
+    if (_sortByRanking) {
+      if (_bestMatchType != 'all') {
+        list = list.where((p) => p.type == _bestMatchType).toList();
+      }
+      if (_bestMatchRequireAvailable) {
+        list = list.where((p) => p.posterAvailability == 'available').toList();
+      }
+      if (_bestMatchRadiusKm > 0 && _userLat != null && _userLon != null) {
+        list = list.where((p) {
+          final dist = GeospatialService.getPostDistance(
+            post: p,
+            userLat: _userLat!,
+            userLon: _userLon!,
+          );
+          return dist != null && dist <= _bestMatchRadiusKm;
+        }).toList();
+      }
     }
 
     if (_sortByNearest && _userLat != null && _userLon != null) {

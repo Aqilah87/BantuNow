@@ -11,6 +11,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import '../../utils/colors.dart';
 import '../../providers/language_provider.dart';
+import '../../providers/connectivity_provider.dart';
 import '../../models/bantuan_model.dart';
 import '../../models/location_model.dart';
 import '../../services/bantuan_service.dart';
@@ -287,9 +288,32 @@ class _PostBantuanScreenState extends State<PostBantuanScreen> {
   }
 
   // ── Submit ─────────────────────────────────────────────────────────
-  Future<void> _submit(bool isMalay) async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedAreaId.isEmpty) {
+      Future<void> _submit(bool isMalay) async {
+      // ── Check connectivity dulu sebelum submit ─────────────────────
+      final isOffline = context.read<ConnectivityProvider>().isOffline;
+      if (isOffline) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Row(children: [
+            const Icon(Icons.wifi_off, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                isMalay
+                    ? 'Tiada sambungan internet. Sila semak network dan cuba lagi.'
+                    : 'No internet connection. Please check your network and try again.',
+              ),
+            ),
+          ]),
+          backgroundColor: Colors.grey.shade800,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 3),
+        ));
+        return;
+      }
+
+      if (!_formKey.currentState!.validate()) return;
+      if (_selectedAreaId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
               isMalay ? 'Sila pilih kawasan' : 'Please select area')));

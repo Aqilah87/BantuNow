@@ -12,6 +12,7 @@ import 'services/deep_link_service.dart';
 import 'services/notification_service.dart';
 import 'utils/colors.dart';
 import 'screens/onboarding/splash_screen.dart';
+import 'providers/connectivity_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,8 +49,9 @@ class _BantuNowAppState extends State<BantuNowApp> {
         ChangeNotifierProvider(create: (_) => BantuanProvider()),
         // ✅ Register LocationProvider
         ChangeNotifierProvider(create: (_) => LocationProvider()),
-        // ✅ Register AuthProvider
+      // ✅ Register AuthProvider
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
       ],
       child: MaterialApp(
         title: 'BantuNow',

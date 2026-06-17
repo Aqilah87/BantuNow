@@ -358,17 +358,64 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(
-      Map<String, dynamic> msg, bool isMe) {
-    final type = msg['type'] as String? ?? 'text';
-    final ts = msg['created_at'] as Timestamp?;
-    final timeStr = ts != null
-        ? '${ts.toDate().hour.toString().padLeft(2, '0')}:${ts.toDate().minute.toString().padLeft(2, '0')}'
-        : '';
+        Widget _buildMessageBubble(
+          Map<String, dynamic> msg, bool isMe) {
+        final type = msg['type'] as String? ?? 'text';
+        final ts = msg['created_at'] as Timestamp?;
+        final timeStr = ts != null
+            ? '${ts.toDate().hour.toString().padLeft(2, '0')}:${ts.toDate().minute.toString().padLeft(2, '0')}'
+            : '';
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
+        // ── System message (reject/withdraw notification) ──────────────
+        if (type == 'system') {
+          final text = msg['text'] as String? ?? '';
+          final systemType = msg['system_type'] as String?;
+          final isAlert = systemType == 'reject' || systemType == 'withdraw';
+          final bgColor = isAlert ? Colors.red.withOpacity(0.06) : Colors.grey.shade100;
+          final borderColor = isAlert ? Colors.red.withOpacity(0.3) : Colors.grey.shade300;
+          final textColor = isAlert ? Colors.red.shade700 : AppColors.textGrey;
+
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      text,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: textColor,
+                        fontWeight: isAlert ? FontWeight.w600 : FontWeight.normal,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      timeStr,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: textColor.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(
         mainAxisAlignment:
             isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,

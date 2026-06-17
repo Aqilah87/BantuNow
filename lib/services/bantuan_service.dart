@@ -203,11 +203,16 @@ class BantuanService {
       final newAccepted = latestAccepted + 1;
       final isFull = newAccepted >= totalSlots;
 
+      // Group completion: bila penuh, terus jadi in_progress (kerja dianggap mula)
+      // Individual completion: bila penuh, jadi 'full' (tunggu setiap helper confirm)
+      final statusWhenFull =
+          completionType == 'group' ? 'in_progress' : 'full';
+
       final updateData = <String, dynamic>{
         'accepted_slots': newAccepted,
         'helper_uids': FieldValue.arrayUnion([helperUid]),
         'helper_names': FieldValue.arrayUnion([helperName]),
-        'status': isFull ? 'full' : 'open',
+        'status': isFull ? statusWhenFull : 'open',
       };
 
       // Init confirmation entry hanya untuk individual

@@ -3,11 +3,11 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Primary Colors (Soft Blue)
-  static const Color primaryBlue = Color(0xFF5B9FED);      // Soft blue
-  static const Color lightBlue = Color(0xFF8BBFED);        // Light blue
-  static const Color paleBlue = Color(0xFFB8D8F8);         // Pale blue
-  static const Color backgroundBlue = Color(0xFFF0F7FF);   // Very light blue background
+  // Primary Colors (TNG Dark Blue)
+  static const Color primaryBlue = Color(0xFF003D7C);    
+  static const Color lightBlue = Color(0xFF1A5DA8);      
+  static const Color paleBlue = Color(0xFFB8D8F8);         
+  static const Color backgroundBlue = Color(0xFFF0F7FF);   
   
   // Accent Colors
   static const Color accentOrange = Color(0xFFFF9B71);     // Soft orange for requests

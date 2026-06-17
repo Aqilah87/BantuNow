@@ -3,7 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import '../../utils/colors.dart';
+import '../../providers/language_provider.dart';
 import '../../services/chat_service.dart';
 import 'chat_screen.dart';
 
@@ -24,19 +26,20 @@ class _ConversationListScreenState
 
   @override
   Widget build(BuildContext context) {
+    final isMalay = context.watch<LanguageProvider>().isMalay;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         backgroundColor: AppColors.primaryBlue,
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: const Row(children: [
-          Icon(Icons.chat_bubble_outline,
+        title: Row(children: [
+          const Icon(Icons.chat_bubble_outline,
               color: Colors.white, size: 22),
-          SizedBox(width: 10),
+          const SizedBox(width: 10),
           Text(
-            'Mesej',
-            style: TextStyle(
+            isMalay ? 'Mesej' : 'Messages',
+            style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
                 fontSize: 20),
@@ -44,12 +47,12 @@ class _ConversationListScreenState
         ]),
       ),
       body: FirebaseAuth.instance.currentUser == null
-          ? _buildNotLoggedIn()
-          : _buildConversationList(),
+          ? _buildNotLoggedIn(isMalay)
+          : _buildConversationList(isMalay),
     );
   }
 
-  Widget _buildNotLoggedIn() {
+  Widget _buildNotLoggedIn(bool isMalay) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -59,7 +62,9 @@ class _ConversationListScreenState
               color: AppColors.textGrey.withOpacity(0.4)),
           const SizedBox(height: 16),
           Text(
-            'Log masuk untuk melihat mesej',
+            isMalay
+                ? 'Log masuk untuk melihat mesej'
+                : 'Login to view messages',
             style:
                 TextStyle(fontSize: 15, color: AppColors.textGrey),
           ),
@@ -68,7 +73,7 @@ class _ConversationListScreenState
     );
   }
 
-  Widget _buildConversationList() {
+  Widget _buildConversationList(bool isMalay) {
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _chatService.getConversationsStream(),
       builder: (context, snapshot) {
@@ -88,7 +93,7 @@ class _ConversationListScreenState
                     color: AppColors.textGrey.withOpacity(0.25)),
                 const SizedBox(height: 16),
                 Text(
-                  'Tiada perbualan lagi',
+                  isMalay ? 'Tiada perbualan lagi' : 'No conversations yet',
                   style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -96,7 +101,9 @@ class _ConversationListScreenState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Mulakan perbualan dengan menekan\n"Hubungi" pada mana-mana post.',
+                  isMalay
+                      ? 'Mulakan perbualan dengan menekan\n"Hubungi" pada mana-mana post.'
+                      : 'Start a conversation by tapping\n"Contact" on any post.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       fontSize: 13, color: AppColors.textGrey),
@@ -110,14 +117,13 @@ class _ConversationListScreenState
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: conversations.length,
           itemBuilder: (context, index) =>
-              _buildConversationTile(conversations[index]),
+              _buildConversationTile(conversations[index], isMalay),
         );
       },
     );
   }
 
-  Widget _buildConversationTile(Map<String, dynamic> conversation) {
-    final otherUid = _chatService.getOtherUid(conversation);
+    Widget _buildConversationTile(Map<String, dynamic> conversation, bool isMalay) {    final otherUid = _chatService.getOtherUid(conversation);
     final otherName = _chatService.getOtherName(conversation);
     final bantuanTitle =
         conversation['bantuan_title'] as String? ?? '';
@@ -132,8 +138,7 @@ class _ConversationListScreenState
             conversation['id'] as String? ?? '';
 
     final ts = conversation['last_message_at'] as Timestamp?;
-    final timeStr = ts != null ? _formatTime(ts.toDate()) : '';
-
+    final timeStr = ts != null ? _formatTime(ts.toDate(), isMalay) : '';
     final isLastMessageMine = lastSenderUid == _currentUid;
     final hasUnread = unreadCount > 0;
 
@@ -272,23 +277,23 @@ class _ConversationListScreenState
                 ],
 
                 // Last message
-                Row(children: [
-                  if (isLastMessageMine && lastMessage.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: Text(
-                        'Anda: ',
-                        style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textGrey,
-                            fontStyle: FontStyle.italic),
-                      ),
-                    ),
-                  Expanded(
-                    child: Text(
-                      lastMessage.isEmpty
-                          ? 'Mulakan perbualan...'
-                          : lastMessage,
+                      Row(children: [
+                      if (isLastMessageMine && lastMessage.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: Text(
+                            isMalay ? 'Anda: ' : 'You: ',
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textGrey,
+                                fontStyle: FontStyle.italic),
+                          ),
+                        ),
+                      Expanded(
+                        child: Text(
+                          lastMessage.isEmpty
+                              ? (isMalay ? 'Mulakan perbualan...' : 'Start a conversation...')
+                              : lastMessage,
                       style: TextStyle(
                           fontSize: 13,
                           color: hasUnread
@@ -310,21 +315,26 @@ class _ConversationListScreenState
     );
   }
 
-  String _formatTime(DateTime dt) {
+  String _formatTime(DateTime dt, bool isMalay) {
     final now = DateTime.now();
     final diff = now.difference(dt);
 
-    if (diff.inMinutes < 1) return 'Baru';
+    if (diff.inMinutes < 1) return isMalay ? 'Baru' : 'Just now';
     if (diff.inHours < 1) return '${diff.inMinutes}m';
     if (diff.inDays < 1) {
       return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     }
     if (diff.inDays < 7) return '${diff.inDays}h';
 
-    final months = [
+    final monthsMy = [
       'Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun',
       'Jul', 'Ogs', 'Sep', 'Okt', 'Nov', 'Dis'
     ];
+    final monthsEn = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final months = isMalay ? monthsMy : monthsEn;
     return '${dt.day} ${months[dt.month - 1]}';
   }
 }

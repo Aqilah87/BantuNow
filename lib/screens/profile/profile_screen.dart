@@ -251,12 +251,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = FirebaseAuth.instance.currentUser;
 
     final roleLabel = _requestCount > 0 && _offerCount > 0
-        ? 'Both'
-        : _offerCount > 0
-            ? 'Helper'
-            : _requestCount > 0
-                ? 'Requester'
-                : (isMalay ? 'Ahli Baru' : 'New Member');
+    ? (isMalay ? 'Kedua-duanya' : 'Both')
+    : _offerCount > 0
+        ? (isMalay ? 'Pembantu' : 'Helper')
+        : _requestCount > 0
+            ? (isMalay ? 'Pemohon' : 'Requester')
+            : (isMalay ? 'Ahli Baru' : 'New Member');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -417,14 +417,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const SizedBox(height: 12),
 
                           // Stat chips
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _buildStatChip(
-                                  '$_requestCount', 'Request', Colors.orange),
-                              const SizedBox(width: 12),
-                              _buildStatChip(
-                                  '$_offerCount', 'Offer', Colors.blue),
+                              Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildStatChip(
+                                    '$_requestCount',
+                                    isMalay ? 'Minta' : 'Request',
+                                    Colors.orange),
+                                const SizedBox(width: 12),
+                                _buildStatChip(
+                                    '$_offerCount',
+                                    isMalay ? 'Tawar' : 'Offer',
+                                    Colors.blue),
                               const SizedBox(width: 12),
                               _buildStatChip(
                                   '${_requestCount + _offerCount}',

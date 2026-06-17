@@ -1127,7 +1127,25 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
         isIndividual: !_isGroupCompletion,
         reason: reason,
       );
-      if (result['success'] == true) {
+        if (result['success'] == true) {
+        // Hantar mesej automatik kepada helper yang direject
+        try {
+          final chatService = ChatService();
+          final conversationId = await chatService.getOrCreateConversation(
+            otherUid: helperUid,
+            otherName: helperName,
+            bantuanId: _bantuan.id,
+            bantuanTitle: _bantuan.title,
+          );
+          await chatService.sendSystemMessage(
+            conversationId: conversationId,
+            message: isMalay
+                ? '❌ Anda telah ditolak daripada post "${_bantuan.title}".\nSebab: $reason'
+                : '❌ You have been rejected from post "${_bantuan.title}".\nReason: $reason',
+            systemType: 'reject',
+          );
+        } catch (_) {}
+
         await _refreshBantuan();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1286,17 +1304,34 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
           'message': 'timeout',
         });
 
-        if (result['success'] == true) {
-        await _refreshBantuan();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(isMalay
-                ? '↩️ Anda telah tarik diri.'
-                : '↩️ You have withdrawn.'),
-            backgroundColor: Colors.grey.shade700,
-          ));
-        }
+          if (result['success'] == true) {
+          // Hantar mesej automatik kepada owner
+          try {
+            final chatService = ChatService();
+            final conversationId = await chatService.getOrCreateConversation(
+              otherUid: _bantuan.postedByUid,
+              otherName: _bantuan.postedBy,
+              bantuanId: _bantuan.id,
+              bantuanTitle: _bantuan.title,
+            );
+            await chatService.sendSystemMessage(
+              conversationId: conversationId,
+              message: isMalay
+                  ? '↩️ $helperName telah tarik diri daripada post "${_bantuan.title}".\nSebab: $reason'
+                  : '↩️ $helperName has withdrawn from post "${_bantuan.title}".\nReason: $reason',
+              systemType: 'withdraw',
+            );
+          } catch (_) {}
 
+          await _refreshBantuan();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(isMalay
+                  ? '↩️ Anda telah tarik diri.'
+                  : '↩️ You have withdrawn.'),
+              backgroundColor: Colors.grey.shade700,
+            ));
+          }
         } else {
           if (mounted) {
             final msg = result['message'] as String? ?? '';
@@ -2632,17 +2667,19 @@ class _BantuanDetailScreenState extends State<BantuanDetailScreen> {
     final isMultiple = _bantuan.isMultipleSlot;
     final widgets = <Widget>[];
 
-    if (_isOwner) {
-      // ── OWNER ──────────────────────────────────────────────────────
+          if (_isOwner) {
+          // ── OWNER ──────────────────────────────────────────────────────
 
-      if (status == 'open' || status == 'full') {
-        // Multiple: tunjuk helper list dengan status confirm + butang tutup post
-        if (isMultiple && _bantuan.helperUids.isNotEmpty) {
-          widgets.addAll([
-            const SizedBox(height: 16),
-            _buildHelperListCard(isMalay),
-          ]);
-        } else {
+          if (status == 'open' ||
+              status == 'full' ||
+              (status == 'in_progress' && isMultiple)) {
+            // Multiple: tunjuk helper list dengan status confirm + butang tutup post
+            if (isMultiple && _bantuan.helperUids.isNotEmpty) {
+              widgets.addAll([
+                const SizedBox(height: 16),
+                _buildHelperListCard(isMalay),
+              ]);
+            } else {
           // Tiada helper lagi — tunjuk delete je
           widgets.addAll([
             const SizedBox(height: 12),

@@ -133,6 +133,31 @@ class ChatService {
     );
   }
 
+  // ─── Send system message (auto-generated, no sender) ──────────────
+  // systemType: 'reject' | 'withdraw' | null (general/neutral system message)
+  Future<void> sendSystemMessage({
+    required String conversationId,
+    required String message,
+    String? systemType,
+  }) async {
+    final convRef = _firestore.collection('chats').doc(conversationId);
+
+    await convRef.collection('messages').add({
+      'sender_uid': 'system',
+      'text': message,
+      'type': 'system',
+      if (systemType != null) 'system_type': systemType,
+      'created_at': FieldValue.serverTimestamp(),
+      'read_by': [],
+    });
+
+    await convRef.update({
+      'last_message': message,
+      'last_message_at': FieldValue.serverTimestamp(),
+      'last_message_sender': 'system',
+    });
+  }
+
   // ─── Mark messages as read ────────────────────────────────────────
   Future<void> markAsRead(String conversationId) async {
     final currentUser = FirebaseAuth.instance.currentUser!;
